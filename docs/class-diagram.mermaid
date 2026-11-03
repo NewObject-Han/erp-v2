@@ -1,0 +1,594 @@
+%% 外贸 ERP V2 核心实体类图
+%% 主数据层
+
+classDiagram
+    class Customer {
+        +string id
+        +string code
+        +string name
+        +string country
+        +string contactPerson
+        +string email
+        +string phone
+        +PaymentTerms paymentTerms
+        +number creditLimit
+        +number creditDays
+        +CustomerStatus status
+        +datetime createdAt
+        +datetime updatedAt
+    }
+
+    class Product {
+        +string id
+        +string sku
+        +string name
+        +string nameEn
+        +string hsCode
+        +string unit
+        +string categoryId
+        +number costPrice
+        +number salePrice
+        +string specs
+    }
+
+    class Incoterm {
+        +string id
+        +string code
+        +string name
+        +string description
+        +boolean active
+    }
+
+    class ExchangeRate {
+        +string id
+        +string fromCurrency
+        +string toCurrency
+        +number rate
+        +date date
+    }
+
+    class Warehouse {
+        +string id
+        +string code
+        +string name
+        +WarehouseType type
+        +string location
+    }
+
+    %% 销售域
+    class Inquiry {
+        +string id
+        +string customerId
+        +string productId
+        +number quantity
+        +number targetPrice
+        +string currency
+        +string incoterm
+        +InquirySource source
+        +string emailRaw
+        +boolean aiParsed
+        +InquiryStatus status
+    }
+
+    class Quotation {
+        +string id
+        +string code
+        +string customerId
+        +string inquiryId
+        +number version
+        +QuotationItem[] items
+        +number totalAmount
+        +string currency
+        +string incoterm
+        +date validFrom
+        +date validTo
+        +number profitRate
+        +QuotationStatus status
+        +string approver
+    }
+
+    class QuotationItem {
+        +string productId
+        +string productName
+        +number quantity
+        +number unitPrice
+        +number totalPrice
+    }
+
+    class PiDoc {
+        +string id
+        +string code
+        +string quotationId
+        +string customerId
+        +PiItem[] items
+        +number totalAmount
+        +string currency
+        +string incoterm
+        +date issueDate
+        +PiStatus status
+    }
+
+    class SampleOrder {
+        +string id
+        +string code
+        +string customerId
+        +string inquiryId
+        +SampleItem[] items
+        +number sampleFee
+        +boolean feeOffset
+        +SampleStatus status
+    }
+
+    class SalesOrder {
+        +string id
+        +string code
+        +string customerId
+        +string piId
+        +SalesOrderItem[] items
+        +number totalAmount
+        +string currency
+        +string incoterm
+        +PaymentTerms paymentTerms
+        +date deliveryDate
+        +OrderStatus status
+        +OrderSource source
+    }
+
+    class SalesOrderItem {
+        +string productId
+        +string productName
+        +number quantity
+        +number unitPrice
+        +number totalPrice
+    }
+
+    class CustomerCredit {
+        +string id
+        +string customerId
+        +number creditLimit
+        +number usedAmount
+        +number availableAmount
+        +number creditDays
+        +CreditStatus status
+    }
+
+    %% 采购域
+    class Supplier {
+        +string id
+        +string code
+        +string name
+        +string country
+        +string contactPerson
+        +string email
+        +string phone
+        +SupplierLevel level
+        +SupplierStatus status
+    }
+
+    class PurchaseInquiry {
+        +string id
+        +string code
+        +string supplierId
+        +string salesOrderId
+        +PurchaseInquiryItem[] items
+        +number totalAmount
+        +string currency
+        +PurInquiryStatus status
+    }
+
+    class PriceCompare {
+        +string id
+        +string inquiryId
+        +SupplierQuote[] quotes
+        +string selectedSupplier
+        +CompareStatus status
+    }
+
+    class SupplierQuote {
+        +string supplierId
+        +number unitPrice
+        +number taxRate
+        +number totalPrice
+        +date validTo
+    }
+
+    class PurchaseOrder {
+        +string id
+        +string code
+        +string supplierId
+        +string salesOrderId
+        +PurchaseOrderItem[] items
+        +number totalAmount
+        +string currency
+        +number taxRate
+        +date deliveryDate
+        +POStatus status
+    }
+
+    class PurchaseOrderItem {
+        +string productId
+        +string productName
+        +number quantity
+        +number unitPrice
+        +number totalPrice
+    }
+
+    class PoArrival {
+        +string id
+        +string poId
+        +ArrivalItem[] items
+        +number arrivedQty
+        +number defectiveQty
+        +ArrivalStatus status
+    }
+
+    %% 跟单域
+    class TrackingOrder {
+        +string id
+        +string salesOrderId
+        +string purchaseOrderId
+        +TrackingNode[] nodes
+        +TrackingStatus status
+    }
+
+    class TrackingNode {
+        +string id
+        +string orderId
+        +TrackingNodeType nodeType
+        +string nodeName
+        +date plannedDate
+        +date actualDate
+        +number progress
+        +NodeStatus status
+        +string responsible
+    }
+
+    class TrackingException {
+        +string id
+        +string nodeId
+        +string type
+        +string description
+        +date reportedAt
+        +ExceptionStatus status
+        +string resolution
+    }
+
+    %% 物流单证域
+    class Booking {
+        +string id
+        +string code
+        +string salesOrderId
+        +string portOfLoading
+        +string portOfDischarge
+        +string vessel
+        +string voyage
+        +date etd
+        +date eta
+        +number freight
+        +number insurance
+        +string bookingNo
+        +BookingStatus status
+    }
+
+    class CustomsDeclaration {
+        +string id
+        +string code
+        +string bookingId
+        +string exporterName
+        +string importerName
+        +string hsCode
+        +number declareValue
+        +number taxAmount
+        +CustomsStatus status
+    }
+
+    class Document {
+        +string id
+        +DocType type
+        +string bookingId
+        +string salesOrderId
+        +string code
+        +object content
+        +string pdfUrl
+        +DocStatus status
+        +AuditResult auditResult
+    }
+
+    class AuditResult {
+        +boolean passed
+        +AuditItem[] discrepancies
+        +number criticalCount
+        +number majorCount
+        +number minorCount
+    }
+
+    class AuditItem {
+        +string docType
+        +string field
+        +string expected
+        +string actual
+        +string severity
+    }
+
+    %% 仓储域
+    class Inventory {
+        +string id
+        +string productId
+        +string warehouseId
+        +number onHand
+        +number onOrder
+        +number safetyStock
+        +number unitCost
+        +datetime lastUpdated
+    }
+
+    class InboundOrder {
+        +string id
+        +string code
+        +string poId
+        +string warehouseId
+        +InboundItem[] items
+        +InboundStatus status
+    }
+
+    class OutboundOrder {
+        +string id
+        +string code
+        +string soId
+        +string warehouseId
+        +OutboundItem[] items
+        +OutboundStatus status
+    }
+
+    class TransferOrder {
+        +string id
+        +string code
+        +string fromWarehouse
+        +string toWarehouse
+        +TransferItem[] items
+        +TransferStatus status
+    }
+
+    class StocktakeOrder {
+        +string id
+        +string code
+        +string warehouseId
+        +StocktakeItem[] items
+        +StocktakeStatus status
+    }
+
+    class StockAlert {
+        +string id
+        +string productId
+        +string warehouseId
+        +AlertType type
+        +string message
+        +AlertStatus status
+    }
+
+    %% 财务域
+    class ARInvoice {
+        +string id
+        +string code
+        +string customerId
+        +string salesOrderId
+        +number amount
+        +string currency
+        +number exchangeRate
+        +number amountCny
+        +date issueDate
+        +date dueDate
+        +number paidAmount
+        +ARStatus status
+    }
+
+    class APInvoice {
+        +string id
+        +string code
+        +string supplierId
+        +string purchaseOrderId
+        +number amount
+        +string currency
+        +number taxRate
+        +number taxAmount
+        +date dueDate
+        +APStatus status
+    }
+
+    class CostAnalysis {
+        +string id
+        +string salesOrderId
+        +CostItem[] costs
+        +number totalCost
+        +number revenue
+        +number grossProfit
+        +number profitRate
+    }
+
+    class ExpenseRecord {
+        +string id
+        +string code
+        +string type
+        +string department
+        +number amount
+        +date date
+        +string description
+        +ExpenseStatus status
+    }
+
+    %% 税务外汇域
+    class RefundDeclaration {
+        +string id
+        +string code
+        +string salesOrderId
+        +string customsId
+        +number declareAmount
+        +number taxRate
+        +number refundAmount
+        +RefundStatus status
+    }
+
+    class VATRecord {
+        +string id
+        +string code
+        +VATType type
+        +string refId
+        +number amount
+        +number taxRate
+        +date period
+        +VATStatus status
+    }
+
+    class FxVerification {
+        +string id
+        +string code
+        +string arId
+        +string receiptNo
+        +number amount
+        +string currency
+        +date verifyDate
+        +FxStatus status
+    }
+
+    class LcDoc {
+        +string id
+        +string code
+        +string salesOrderId
+        +string applicant
+        +string beneficiary
+        +number amount
+        +string currency
+        +date expiryDate
+        +LcStatus status
+        +LcDocument[] documents
+    }
+
+    class LcDocument {
+        +string id
+        +string lcId
+        +DocType type
+        +string docNo
+        +LcDocStatus status
+    }
+
+    %% 系统域
+    class User {
+        +string id
+        +string username
+        +string displayName
+        +string email
+        +string[] roleIds
+        +UserStatus status
+        +datetime createdAt
+    }
+
+    class Role {
+        +string id
+        +string code
+        +string name
+        +string description
+        +string[] permissionIds
+    }
+
+    class Permission {
+        +string id
+        +string module
+        +string action
+        +string description
+    }
+
+    class OperationLog {
+        +string id
+        +string userId
+        +string action
+        +string resource
+        +string detail
+        +datetime at
+    }
+
+    %% CRM 域
+    class FollowUp {
+        +string id
+        +string customerId
+        +string type
+        +string content
+        +datetime at
+        +string user
+    }
+
+    class Opportunity {
+        +string id
+        +string customerId
+        +string inquiryId
+        +number estimatedAmount
+        +OpportunityStage stage
+        +datetime expectedClose
+    }
+
+    %% 关联关系
+    Customer ||--o{ Inquiry : "发起"
+    Customer ||--o{ Quotation : "收到"
+    Customer ||--o{ SalesOrder : "下单"
+    Customer ||--o{ ARInvoice : "应收"
+    Customer ||--o{ CustomerCredit : "信用"
+    Customer ||--o{ FollowUp : "跟进"
+    Customer ||--o{ Opportunity : "商机"
+
+    Inquiry ||--o{ Quotation : "转为"
+    Quotation ||--o{ PiDoc : "生成"
+    PiDoc ||--o| SalesOrder : "确认"
+    Quotation ||--o{ QuotationItem : "包含"
+    SalesOrder ||--o{ SalesOrderItem : "包含"
+    SalesOrder ||--o{ SampleOrder : "关联"
+    SalesOrder ||--o{ CostAnalysis : "成本"
+    SalesOrder ||--o{ ARInvoice : "应收"
+    SalesOrder ||--o{ RefundDeclaration : "退税"
+
+    Product ||--o{ SalesOrderItem : "被购"
+    Product ||--o{ PurchaseOrderItem : "被采"
+    Product ||--o{ Inventory : "库存"
+    Product ||--o{ StockAlert : "预警"
+
+    Supplier ||--o{ PurchaseInquiry : "报价"
+    Supplier ||--o{ PurchaseOrder : "供货"
+    Supplier ||--o{ APInvoice : "应付"
+
+    PurchaseInquiry ||--o{ PriceCompare : "比价"
+    PriceCompare ||--o{ SupplierQuote : "报价明细"
+    PurchaseOrder ||--o{ PoArrival : "到货"
+    PurchaseOrder ||--o{ InboundOrder : "入库"
+
+    SalesOrder ||--o{ TrackingOrder : "跟单"
+    TrackingOrder ||--o{ TrackingNode : "节点"
+    TrackingNode ||--o{ TrackingException : "异常"
+
+    SalesOrder ||--o{ Booking : "订舱"
+    Booking ||--o{ CustomsDeclaration : "报关"
+    Booking ||--o{ Document : "单证"
+    CustomsDeclaration ||--o{ RefundDeclaration : "退税"
+    Document ||--o| AuditResult : "审核"
+
+    Booking ||--o{ InboundOrder : "入库"
+    InboundOrder ||--o{ Inventory : "增加"
+    OutboundOrder ||--o{ Inventory : "减少"
+    TransferOrder ||--o{ Inventory : "调拨"
+    StocktakeOrder ||--o{ Inventory : "盘点"
+
+    ARInvoice ||--o{ FxVerification : "核销"
+    ARInvoice ||--o{ RefundDeclaration : "退税"
+    APInvoice ||--o{ VATRecord : "进项"
+    ARInvoice ||--o{ VATRecord : "销项"
+
+    User ||--o{ Role : "拥有"
+    Role ||--o{ Permission : "授权"
+    User ||--o{ OperationLog : "操作"
+
+    LcDoc ||--o{ LcDocument : "交单"
+    LcDoc ||--o| SalesOrder : "关联"
+    LcDocument ||--o{ AuditResult : "审核"
+
+    ExchangeRate ||--o{ ARInvoice : "汇率"
+    ExchangeRate ||--o{ APInvoice : "汇率"
+    Incoterm ||--o{ Quotation : "贸易术语"
+    Incoterm ||--o{ SalesOrder : "贸易术语"
+    Warehouse ||--o{ Inventory : "库存"

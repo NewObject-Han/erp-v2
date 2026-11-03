@@ -1,0 +1,93 @@
+%% 外贸 ERP V2 核心时序图
+%% 主链路：询盘→报价→订单→采购→跟单→出货→收款
+
+sequenceDiagram
+    actor Sales as 销售
+    actor AI as AI引擎
+    actor System as ERP系统
+    actor Pur as 采购
+    actor WH as 仓库
+    actor Doc as 单证
+    actor Fin as 财务
+
+    %% 询盘阶段
+    Sales->>AI: 粘贴询价邮件
+    AI->>AI: parseEmail(rawText)
+    AI-->>Sales: 返回结构化询盘（客户/商品/数量/目标价）
+    Sales->>System: createInquiry(data)
+    System-->>Sales: 询盘创建成功
+
+    %% 报价阶段
+    Sales->>System: createQuotation(inquiryId)
+    System->>System: 查询商品成本、历史报价
+    System-->>Sales: 返回成本参考数据
+    Sales->>System: fillQuotation(items, incoterm, currency)
+    System->>System: calculateProfit(items, costs)
+    System-->>Sales: 显示利润率
+    Sales->>System: submitQuotation(approval)
+    System-->>Sales: 审批通过，报价生效
+
+    %% PI → 订单
+    Sales->>System: generatePi(quotationId)
+    System-->>Sales: PI 生成
+    Sales->>System: confirmPi(piId)
+    System->>System: 状态流转 PI→Order
+    System-->>Sales: 销售订单已创建
+
+    %% 采购
+    System->>Pur: 通知采购需求
+    Pur->>System: createPurchaseInquiry(items)
+    Pur->>System: comparePrices(supplierQuotes)
+    System-->>Pur: 比价表
+    Pur->>System: createPurchaseOrder(supplierId, items)
+    System-->>Pur: 采购订单已创建
+
+    %% 跟单
+    Pur->>System: updateTrackingNode(poId, progress)
+    System-->>Sales: 跟单进度更新
+
+    %% 到货入库
+    Pur->>WH: 到货确认
+    WH->>System: createInbound(poId, items)
+    System->>System: 更新库存
+    System-->>Pur: 入库完成
+
+    %% 出货
+    Doc->>System: createBooking(soId)
+    System-->>Doc: 订舱单
+    Doc->>System: generateDocuments(bookingId)
+    System-->>Doc: 发票/箱单/产地证/提单
+    Doc->>AI: auditDocuments(documents)
+    AI->>AI: checkConsistency(docs)
+    AI-->>Doc: 审核报告（单单相符/单证相符）
+    Doc->>System: submitCustoms(bookingId)
+    System-->>Doc: 报关放行
+
+    %% 收款
+    Fin->>System: createReceivable(soId)
+    System-->>Fin: 应收单
+    Fin->>System: recordReceipt(arId, amount, date)
+    System->>System: 外汇核销
+    System->>System: 应收核销
+    System-->>Fin: 核销完成
+    Fin->>System: generateRefundDeclaration(soId)
+    System-->>Fin: 退税申报数据
+
+    %% AI 单证一致性审核流程
+    Note over Doc,AI: --- AI 单证一致性审核子流程 ---
+    Doc->>System: 上传/选择待审核单证组
+    System->>System: 收集该订单所有单证
+    System->>AI: auditDocuments(docs, lcTerms?)
+    AI->>AI: Step 1: OCR + 结构化抽取
+    AI->>AI: Step 2: 单单相符检查
+    AI->>AI: Step 3: 单证相符检查（L/C项下）
+    AI->>AI: Step 4: 不一致项分类
+    AI-->>System: 返回审核报告
+    alt 全部相符
+        System-->>Doc: ✅ 审核通过
+    else 存在不符点
+        System-->>Doc: ❌ 显示不符点列表
+        Doc->>System: 修改单证
+        Doc->>AI: 重新审核
+        AI-->>Doc: 复审结果
+    end
