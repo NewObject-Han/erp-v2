@@ -13,7 +13,8 @@ import {
   WarningOutlined,
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
-import { useSalesOrders, useReceivables, useInquiries, useStockAlerts } from '../../api/hooks';
+import { useSalesOrders, useReceivables, useInquiries, useStockAlerts, useQuotations, usePiDocs, useCustomers } from '../../api/hooks';
+import { useT } from '../../i18n';
 
 const { Text } = Typography;
 
@@ -30,15 +31,16 @@ const STATUS_COLORS: Record<string, string> = {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { token } = antdTheme.useToken();
+  const t = useT();
   const { data: ordersData } = useSalesOrders();
   const { data: arData } = useReceivables();
   const { data: inquiryData } = useInquiries();
   const { data: alertData } = useStockAlerts();
 
-  const orders = useMemo(() => (ordersData as { list: Record<string, unknown>[] })?.list ?? [], [ordersData]);
-  const arList = useMemo(() => (arData as { list: Record<string, unknown>[] })?.list ?? [], [arData]);
-  const inquiries = useMemo(() => (inquiryData as { list: Record<string, unknown>[] })?.list ?? [], [inquiryData]);
-  const alerts = useMemo(() => (alertData as unknown[]) ?? [], [alertData]);
+  const orders = useMemo(() => (ordersData as unknown as { list: Record<string, unknown>[] })?.list ?? [], [ordersData]);
+  const arList = useMemo(() => (arData as unknown as { list: Record<string, unknown>[] })?.list ?? [], [arData]);
+  const inquiries = useMemo(() => (inquiryData as unknown as { list: Record<string, unknown>[] })?.list ?? [], [inquiryData]);
+  const alerts = useMemo(() => (alertData as unknown as { status?: string }[]) ?? [], [alertData]);
 
   const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.totalAmount) || 0), 0);
   const totalOutstanding = arList
@@ -71,6 +73,50 @@ export default function DashboardPage() {
     return Object.entries(months).map(([month, amount]) => ({ month, amount: Math.round(amount) }));
   }, [orders]);
 
+  // ===== 经营分析：漏斗 / 客户 TOP / 国家分布 =====
+  const { data: quotationData } = useQuotations();
+  const { data: piData } = usePiDocs();
+  const { data: customerData } = useCustomers();
+  const quotations = useMemo(() => (quotationData as unknown as { list: Record<string, unknown>[] })?.list ?? [], [quotationData]);
+  const piDocs = useMemo(() => (piData as unknown as { list: Record<string, unknown>[] })?.list ?? [], [piData]);
+  const customerList = useMemo(() => (customerData as { list: { id: string; name: string; country: string }[] })?.list ?? [], [customerData]);
+
+  const funnelData = useMemo(
+    () => [
+      { name: '询盘', value: inquiries.length },
+      { name: '报价', value: quotations.length },
+      { name: 'PI', value: piDocs.length },
+      { name: '订单', value: orders.length },
+    ],
+    [inquiries, quotations, piDocs, orders],
+  );
+
+  const topCustomers = useMemo(() => {
+    const map = new Map<string, { total: number; count: number }>();
+    orders.forEach((o) => {
+      const cid = String(o.customerId ?? '—');
+      const cur = map.get(cid) ?? { total: 0, count: 0 };
+      map.set(cid, { total: cur.total + (Number(o.totalAmount) || 0), count: cur.count + 1 });
+    });
+    return [...map.entries()]
+      .map(([cid, v]) => {
+        const c = customerList.find((x) => x.id === cid);
+        return { name: c?.name ?? cid, country: c?.country ?? '—', total: Math.round(v.total), count: v.count };
+      })
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }, [orders, customerList]);
+
+  const countryDist = useMemo(() => {
+    const map = new Map<string, number>();
+    orders.forEach((o) => {
+      const c = customerList.find((x) => x.id === String(o.customerId ?? ''));
+      const country = c?.country ?? '未知';
+      map.set(country, (map.get(country) ?? 0) + (Number(o.totalAmount) || 0));
+    });
+    return [...map.entries()].map(([name, value]) => ({ name, value: Math.round(value) }));
+  }, [orders, customerList]);
+
   const workflowSteps = [
     { label: '询盘', count: pendingInquiries, path: '/sales' },
     { label: '报价', path: '/sales' },
@@ -91,9 +137,9 @@ export default function DashboardPage() {
         color: '#fff',
         borderRadius: 6,
       }}>
-        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>外贸 ERP 工作台</div>
+        <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>{t('外贸 ERP 工作台')}</div>
         <div style={{ fontSize: 13, opacity: 0.85 }}>
-          B2B 贸易全流程管理 · 询价 → 报价 → 订单 → 采购 → 跟单 → 出货 → 收款 → 退税
+          {t('B2B 贸易全流程管理 · 询价 → 报价 → 订单 → 采购 → 跟单 → 出货 → 收款 → 退税')}
         </div>
       </div>
 
@@ -122,22 +168,22 @@ export default function DashboardPage() {
       <Row gutter={8} style={{ marginBottom: 16 }}>
         <Col xs={12} md={6}>
           <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '12px 16px' } }}>
-            <Statistic title="订单总额 (USD)" value={totalRevenue.toLocaleString()} prefix={<DollarOutlined style={{ color: token.colorPrimary }} />} valueStyle={{ fontSize: 20, color: token.colorPrimary }} />
+            <Statistic title={t('订单总额 (USD)')} value={totalRevenue.toLocaleString()} prefix={<DollarOutlined style={{ color: token.colorPrimary }} />} valueStyle={{ fontSize: 20, color: token.colorPrimary }} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '12px 16px' } }}>
-            <Statistic title="应收余额 (CNY)" value={totalOutstanding.toLocaleString()} valueStyle={{ fontSize: 20, color: '#ff4d4f' }} suffix={<span style={{ fontSize: 11, color: '#ff4d4f' }}>{overdueCount} 笔逾期</span>} />
+            <Statistic title={t('应收余额 (CNY)')} value={totalOutstanding.toLocaleString()} valueStyle={{ fontSize: 20, color: '#ff4d4f' }} suffix={<span style={{ fontSize: 11, color: '#ff4d4f' }}>{overdueCount} {t('笔逾期')}</span>} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '12px 16px' } }}>
-            <Statistic title="待处理询价" value={pendingInquiries} prefix={<FieldTimeOutlined style={{ color: token.colorWarning }} />} valueStyle={{ fontSize: 20 }} />
+            <Statistic title={t('待处理询价')} value={pendingInquiries} prefix={<FieldTimeOutlined style={{ color: token.colorWarning }} />} valueStyle={{ fontSize: 20 }} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
           <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '12px 16px' } }}>
-            <Statistic title="库存预警" value={alertCount} prefix={<AlertOutlined style={{ color: token.colorError }} />} valueStyle={{ fontSize: 20, color: token.colorWarning }} />
+            <Statistic title={t('库存预警')} value={alertCount} prefix={<AlertOutlined style={{ color: token.colorError }} />} valueStyle={{ fontSize: 20, color: token.colorWarning }} />
           </Card>
         </Col>
       </Row>
@@ -145,7 +191,7 @@ export default function DashboardPage() {
       {/* 图表区 */}
       <Row gutter={8} style={{ marginBottom: 16 }}>
         <Col xs={24} md={14}>
-          <Card size="small" title="月度销售趋势" style={{ borderRadius: 4, height: 280 }} styles={{ body: { padding: '8px 12px 0' } }}>
+          <Card size="small" title={t('月度销售趋势')} style={{ borderRadius: 4, height: 280 }} styles={{ body: { padding: '8px 12px 0' } }}>
             <ReactECharts
               option={{
                 tooltip: { trigger: 'axis' },
@@ -159,7 +205,7 @@ export default function DashboardPage() {
           </Card>
         </Col>
         <Col xs={24} md={10}>
-          <Card size="small" title="订单状态分布" style={{ borderRadius: 4, height: 280 }} styles={{ body: { padding: '8px 12px 0' } }}>
+          <Card size="small" title={t('订单状态分布')} style={{ borderRadius: 4, height: 280 }} styles={{ body: { padding: '8px 12px 0' } }}>
             <ReactECharts
               option={{
                 tooltip: { trigger: 'item' },
@@ -172,6 +218,79 @@ export default function DashboardPage() {
                   label: { fontSize: 11 },
                 }],
                 color: pieData.map((e) => STATUS_COLORS[e.name] ?? '#8c8c8c'),
+              }}
+              style={{ height: 232 }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      {/* 经营分析：转化漏斗 / 客户 TOP / 国家分布 */}
+      <Row gutter={8} style={{ marginBottom: 16 }}>
+        <Col xs={24} md={8}>
+          <Card size="small" title={t('订单转化漏斗')} style={{ borderRadius: 4, height: 280 }} styles={{ body: { padding: '8px 12px 0' } }}>
+            <ReactECharts
+              option={{
+                tooltip: { trigger: 'item', formatter: '{b}: {c} 单' },
+                series: [{
+                  type: 'funnel',
+                  left: 10, right: 10, top: 12, bottom: 12,
+                  minSize: '28%',
+                  sort: 'descending',
+                  gap: 3,
+                  label: { show: true, position: 'inside', formatter: '{b}  {c}', fontSize: 11.5 },
+                  itemStyle: { borderWidth: 0 },
+                  data: funnelData,
+                }],
+              }}
+              style={{ height: 232 }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} md={9}>
+          <Card size="small" title={t('客户 TOP 5（订单金额）')} style={{ borderRadius: 4, height: 280 }} styles={{ body: { padding: '8px 12px 0' } }}>
+            <ReactECharts
+              option={{
+                tooltip: {
+                  trigger: 'axis',
+                  axisPointer: { type: 'shadow' },
+                  formatter: (ps: { dataIndex: number }[]) => {
+                    const c = topCustomers[ps[0]?.dataIndex];
+                    return c ? `${c.name}（${c.country}）<br/>订单 ${c.count} 笔 · 金额 ${c.total.toLocaleString()}` : '';
+                  },
+                },
+                grid: { left: 8, right: 56, top: 10, bottom: 4, containLabel: true },
+                xAxis: { type: 'value', axisLabel: { fontSize: 11 } },
+                yAxis: {
+                  type: 'category',
+                  data: [...topCustomers].reverse().map((c) => c.name),
+                  axisLabel: { fontSize: 11, width: 96, overflow: 'truncate' },
+                },
+                series: [{
+                  type: 'bar',
+                  barWidth: 14,
+                  data: [...topCustomers].reverse().map((c) => c.total),
+                  itemStyle: { color: token.colorPrimary, borderRadius: [0, 4, 4, 0] },
+                  label: { show: true, position: 'right', fontSize: 11, formatter: (p: { value: number }) => p.value.toLocaleString() },
+                }],
+              }}
+              style={{ height: 232 }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} md={7}>
+          <Card size="small" title={t('国家 / 地区分布')} style={{ borderRadius: 4, height: 280 }} styles={{ body: { padding: '8px 12px 0' } }}>
+            <ReactECharts
+              option={{
+                tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                legend: { bottom: 0, icon: 'circle', itemWidth: 8, itemHeight: 8, textStyle: { fontSize: 11 } },
+                series: [{
+                  type: 'pie',
+                  radius: ['40%', '66%'],
+                  center: ['50%', '44%'],
+                  data: countryDist,
+                  label: { formatter: '{b}\n{d}%', fontSize: 11 },
+                }],
               }}
               style={{ height: 232 }}
             />
@@ -209,7 +328,7 @@ export default function DashboardPage() {
                   <List.Item.Meta
                     avatar={<ShoppingCartOutlined style={{ fontSize: 16, color: token.colorPrimary }} />}
                     title={<Text style={{ fontSize: 13 }}>{String(o.code)} - {String(o.currency)} {Number(o.totalAmount).toLocaleString()}</Text>}
-                    description={<Text type="secondary" style={{ fontSize: 12 }}>{String(o.createdAt?.split('T')?.[0] ?? '')}</Text>}
+                    description={<Text type="secondary" style={{ fontSize: 12 }}>{String(o.createdAt ?? '').split('T')[0]}</Text>}
                   />
                 </List.Item>
               )}

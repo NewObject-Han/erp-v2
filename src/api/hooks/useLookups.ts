@@ -15,6 +15,7 @@ import {
   purchaseOrders,
   warehouses,
 } from '../repository';
+import type { Product } from '../../types';
 
 export interface LookupOption {
   value: string;
@@ -34,6 +35,8 @@ export interface EntityLookups {
   supplierOptions: LookupOption[];
   salesOrderOptions: LookupOption[];
   warehouseOptions: LookupOption[];
+  /** 商品原始列表（明细行编辑器带出 SKU/HS 编码等字段） */
+  productsRaw: Product[];
 }
 
 async function fetchAll<T extends { id: string }>(
@@ -133,6 +136,7 @@ export function useLookups(): EntityLookups {
       supplierOptions: toOptions(supList),
       salesOrderOptions: toCodeOptions(soList),
       warehouseOptions: toOptions(whList),
+      productsRaw: (prodList ?? []) as Product[],
     };
   }, [cusList, prodList, supList, soList, poList, whList]);
 }

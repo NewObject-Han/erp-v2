@@ -1,47 +1,32 @@
 /**
- * UI 状态（弹窗/抽屉/通知）
+ * 全局 UI 状态：语言 + 主题模式（持久化到 localStorage）
  */
-
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-interface NotificationItem {
-  id: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  message: string;
-  createdAt: number;
-}
+export type Lang = 'zh' | 'en';
+export type ThemeMode = 'light' | 'dark';
 
 interface UiState {
-  /** 通知列表 */
-  notifications: NotificationItem[];
-  /** 全局加载 */
-  globalLoading: boolean;
-  /** 添加通知 */
-  addNotification: (type: NotificationItem['type'], message: string) => void;
-  /** 移除通知 */
-  removeNotification: (id: string) => void;
-  /** 设置全局加载 */
-  setGlobalLoading: (loading: boolean) => void;
+  /** 界面语言 */
+  lang: Lang;
+  /** 主题模式 */
+  themeMode: ThemeMode;
+  setLang: (lang: Lang) => void;
+  toggleTheme: () => void;
 }
 
-const useUiStore = create<UiState>((set) => ({
-  notifications: [],
-  globalLoading: false,
-  addNotification: (type, message) =>
-    set((s) => ({
-      notifications: [
-        ...s.notifications,
-        {
-          id: `n_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          type,
-          message,
-          createdAt: Date.now(),
-        },
-      ],
-    })),
-  removeNotification: (id) =>
-    set((s) => ({ notifications: s.notifications.filter((n) => n.id !== id) })),
-  setGlobalLoading: (loading) => set({ globalLoading: loading }),
-}));
+const useUiStore = create<UiState>()(
+  persist(
+    (set) => ({
+      lang: 'zh',
+      themeMode: 'light',
+      setLang: (lang) => set({ lang }),
+      toggleTheme: () =>
+        set((s) => ({ themeMode: s.themeMode === 'light' ? 'dark' : 'light' })),
+    }),
+    { name: 'erp-v2:ui' },
+  ),
+);
 
 export default useUiStore;

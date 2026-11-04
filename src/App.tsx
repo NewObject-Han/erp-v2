@@ -1,4 +1,5 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import MainLayout from './components/layout/MainLayout';
 import DashboardPage from './pages/dashboard/DashboardPage';
 import SalesPage from './pages/sales/SalesPage';
@@ -13,17 +14,33 @@ import CrmPage from './pages/crm/CrmPage';
 import AiCenterPage from './pages/ai/AiCenterPage';
 import SystemPage from './pages/system/SystemPage';
 import OpenPlatformPage from './pages/open/OpenPlatformPage';
+import LoginPage from './pages/login/LoginPage';
+import useAuthStore from './stores/useAuthStore';
+
+/** 登录守卫：未登录重定向到 /login */
+function RequireAuth({ children }: { children: ReactNode }) {
+  const currentUser = useAuthStore((s) => s.currentUser);
+  if (!currentUser) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
 /**
  * 应用根路由
  *
- * T03 阶段：补全布局路由 + 工作台
- * T05 阶段：补全全部业务模块路由
+ * /login 登录页独立布局；其余页面需登录后访问。
  */
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<MainLayout />}>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <RequireAuth>
+            <MainLayout />
+          </RequireAuth>
+        }
+      >
         <Route index element={<DashboardPage />} />
         <Route path="sales" element={<SalesPage />} />
         <Route path="purchase" element={<PurchasePage />} />
@@ -38,6 +55,7 @@ export default function App() {
         <Route path="system" element={<SystemPage />} />
         <Route path="open" element={<OpenPlatformPage />} />
       </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

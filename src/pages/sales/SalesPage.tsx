@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Card, Tabs, Input, Button, Form, InputNumber, Select, Row, Col, Space, Popconfirm, theme as antdTheme } from 'antd';
-import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Card, Tabs, Input, Button, Form, InputNumber, Select, Row, Col, Space, Popconfirm, Segmented, theme as antdTheme } from 'antd';
+import { PlusOutlined, SearchOutlined, DownloadOutlined, PrinterOutlined } from '@ant-design/icons';
 import {
   useInquiries, useQuotations, useSalesOrders, useSampleOrders, usePiDocs,
   useCreateInquiry, useUpdateInquiry, useDeleteInquiry,
@@ -12,8 +12,12 @@ import {
 } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
 import PageHeader from '../../components/common/PageHeader';
+import KanbanBoard from '../../components/common/KanbanBoard';
 import StatusBadge from '../../components/common/StatusBadge';
 import FormDialog from '../../components/common/FormDialog';
+import DocumentDetailDrawer, { type DetailField } from '../../components/common/DocumentDetailDrawer';
+import type { LineItemRow } from '../../components/common/LineItemsEditor';
+import { printDocument, type PrintDocType } from '../../utils/printDocument';
 import WorkflowGuide from '../../components/common/WorkflowGuide';
 import { INQUIRY_STATUS_LABELS, QUOTATION_STATUS_LABELS, ORDER_STATUS_LABELS } from '../../data/constants/labels';
 import { exportTableCsv } from '../../utils/exportCsv';
@@ -69,6 +73,15 @@ const TAB_CONFIGS: TabConfig[] = [
   },
 ];
 
+/** 看板列颜色（询盘状态） */
+const INQUIRY_STATUS_COLORS: Record<string, string> = {
+  pending: 'orange',
+  quoted: 'geekblue',
+  in_progress: 'blue',
+  converted: 'green',
+  closed: 'default',
+};
+
 export default function SalesPage() {
   const { token } = antdTheme.useToken();
   const [tab, setTab] = useState(0);
@@ -76,6 +89,9 @@ export default function SalesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AnyRow | null>(null);
   const [form] = Form.useForm();
+  const [detail, setDetail] = useState<{ tab: number; row: AnyRow } | null>(null);
+  const [draftItems, setDraftItems] = useState<LineItemRow[] | null>(null);
+  const [inquiryView, setInquiryView] = useState<'table' | 'kanban'>('table');
 
   const { data: inquiriesData } = useInquiries({ keyword: kw });
   const { data: quotationsData } = useQuotations({ keyword: kw });
@@ -100,11 +116,11 @@ export default function SalesPage() {
   const deleteOrder = useDeleteSalesOrder();
   const lookups = useLookups();
 
-  const inquiries = (inquiriesData as { list: AnyRow[] })?.list ?? [];
-  const quotations = (quotationsData as { list: AnyRow[] })?.list ?? [];
-  const orders = (ordersData as { list: AnyRow[] })?.list ?? [];
-  const samples = (samplesData as { list: AnyRow[] })?.list ?? [];
-  const piDocs = (piData as { list: AnyRow[] })?.list ?? [];
+  const inquiries = (inquiriesData as unknown as { list: AnyRow[] })?.list ?? [];
+  const quotations = (quotationsData as unknown as { list: AnyRow[] })?.list ?? [];
+  const orders = (ordersData as unknown as { list: AnyRow[] })?.list ?? [];
+  const samples = (samplesData as unknown as { list: AnyRow[] })?.list ?? [];
+  const piDocs = (piData as unknown as { list: AnyRow[] })?.list ?? [];
 
   const config = TAB_CONFIGS[tab];
 
@@ -119,6 +135,146 @@ export default function SalesPage() {
     form.resetFields();
     form.setFieldsValue(row);
     setDialogOpen(true);
+  };
+
+  const openDetail = (row: AnyRow) => {
+    setDetail({ tab, row });
+    setDraftItems(Array.isArray(row.items) ? (row.items as LineItemRow[]) : null);
+  };
+
+  const closeDetail = () => {
+    setDetail(null);
+    setDraftItems(null);
+  };
+
+  const handleSaveItems = () => {
+    if (!detail || !draftItems) return;
+    const priced = detail.tab === 1 || detail.tab === 3 || detail.tab === 4;
+    const payload: AnyRow = { items: draftItems };
+    if (priced) {
+      payload.totalAmount = draftItems.reduce(
+        (s, it) => s + Number(it.quantity ?? 0) * Number(it.unitPrice ?? 0),
+        0,
+      );
+    }
+    const p = { id: String(detail.row.id), data: payload as never };
+    if (detail.tab === 1) updateQuotation.mutate(p);
+    else if (detail.tab === 2) updateSample.mutate(p);
+    else if (detail.tab === 3) updatePi.mutate(p);
+    else if (detail.tab === 4) updateOrder.mutate(p);
+    closeDetail();
+  };
+
+  const money = (v: unknown, cur: unknown) => `${Number(v ?? 0).toLocaleString()} ${String(cur ?? '')}`;
+
+  const handlePrint = (kind: PrintDocType) => {
+    if (!detail) return;
+    const row = detail.row;
+    const items = (draftItems ?? (Array.isArray(row.items) ? row.items : [])) as never[];
+    const terms: [string, string][] = [];
+    if (kind === 'quotation') {
+      terms.push(
+        ['贸易术语', String(row.incoterm ?? 'FOB')],
+        ['付款方式', '30% T/T deposit, 70% against B/L copy'],
+        ['有效期', String(row.validTo ?? '—')],
+        ['交货期', '30 days after receipt of deposit'],
+      );
+    } else if (kind === 'pi') {
+      terms.push(
+        ['贸易术语', String(row.incoterm ?? 'FOB')],
+        ['付款方式', '30% T/T deposit, 70% before shipment'],
+        ['交货期', '30 days after receipt of deposit'],
+      );
+      if (row.contractNo) terms.push(['合同号', String(row.contractNo)]);
+    } else {
+      terms.push(['原产地', 'China']);
+    }
+    printDocument({
+      docType: kind,
+      docNo: String(row.code ?? row.id),
+      date: String(row.issueDate ?? row.createdAt ?? '').slice(0, 10),
+      customerName: lookups.customerName(row.customerId),
+      items,
+      currency: String(row.currency ?? 'USD'),
+      terms,
+      note: kind === 'packingList'
+        ? 'Country of Origin: China. Weights are estimated for reference only.'
+        : undefined,
+    });
+  };
+
+  const buildDetailFields = (tabIdx: number, row: AnyRow): DetailField[] => {
+    switch (tabIdx) {
+      case 0:
+        return [
+          { label: '编号', value: String(row.code ?? row.id) },
+          { label: '客户', value: lookups.customerName(row.customerId) },
+          { label: '商品', value: lookups.productName(row.productId) },
+          { label: '数量', value: String(row.quantity ?? '—') },
+          { label: '目标价', value: `${Number(row.targetPrice ?? 0)} ${String(row.currency ?? '')}` },
+          { label: '贸易术语', value: String(row.incoterm ?? '—') },
+          { label: '来源', value: String(row.source ?? '—') },
+          { label: 'AI 解析', value: row.aiParsed ? '是' : '否' },
+          { label: '状态', value: <StatusBadge status={String(row.status)} label={INQUIRY_STATUS_LABELS[String(row.status)] ?? String(row.status)} /> },
+          { label: '跟进人', value: String(row.owner ?? '—') },
+          { label: '期望交期', value: String(row.expectedDeliveryDate ?? '—') },
+          { label: '备注', value: String(row.remark ?? '—') },
+        ];
+      case 1:
+        return [
+          { label: '报价单号', value: String(row.code ?? row.id) },
+          { label: '客户', value: lookups.customerName(row.customerId) },
+          { label: '版本', value: `V${String(row.version ?? 1)}` },
+          { label: '总金额', value: money(row.totalAmount, row.currency) },
+          { label: '利润率', value: `${Number(row.profitRate ?? 0)}%` },
+          { label: '贸易术语', value: String(row.incoterm ?? '—') },
+          { label: '有效期', value: `${String(row.validFrom ?? '—')} ~ ${String(row.validTo ?? '—')}` },
+          { label: '状态', value: <StatusBadge status={String(row.status)} label={QUOTATION_STATUS_LABELS[String(row.status)] ?? String(row.status)} /> },
+          { label: '审批人', value: String(row.approver ?? '—') },
+          { label: '跟进人', value: String(row.owner ?? '—') },
+          { label: '审批意见', value: String(row.approvalRemark ?? '—') },
+          { label: '备注', value: String(row.remark ?? '—') },
+        ];
+      case 2:
+        return [
+          { label: '样品单号', value: String(row.code ?? row.id) },
+          { label: '客户', value: lookups.customerName(row.customerId) },
+          { label: '样品费', value: money(row.sampleFee, row.currency) },
+          { label: '费用冲抵大货', value: row.feeOffset ? '是' : '否' },
+          { label: '状态', value: <StatusBadge status={String(row.status)} label={String(row.status)} /> },
+          { label: '跟进人', value: String(row.owner ?? '—') },
+          { label: '寄送单号', value: String(row.trackingNo ?? '—') },
+          { label: '寄送日期', value: row.shippedAt ? String(row.shippedAt).slice(0, 10) : '—' },
+          { label: '确认日期', value: row.confirmedAt ? String(row.confirmedAt).slice(0, 10) : '—' },
+          { label: '备注', value: String(row.remark ?? '—') },
+        ];
+      case 3:
+        return [
+          { label: 'PI 号', value: String(row.code ?? row.id) },
+          { label: '客户', value: lookups.customerName(row.customerId) },
+          { label: '总金额', value: money(row.totalAmount, row.currency) },
+          { label: '贸易术语', value: String(row.incoterm ?? '—') },
+          { label: '签发日期', value: String(row.issueDate ?? '—') },
+          { label: '状态', value: <StatusBadge status={String(row.status)} label={String(row.status)} /> },
+          { label: '合同号', value: String(row.contractNo ?? '—') },
+          { label: '跟进人', value: String(row.owner ?? '—') },
+          { label: '备注', value: String(row.remark ?? '—') },
+        ];
+      default:
+        return [
+          { label: '订单号', value: String(row.code ?? row.id) },
+          { label: '客户', value: lookups.customerName(row.customerId) },
+          { label: '总金额', value: money(row.totalAmount, row.currency) },
+          { label: '贸易术语', value: String(row.incoterm ?? '—') },
+          { label: '付款方式', value: String(row.paymentTerms ?? '—') },
+          { label: '交期', value: String(row.deliveryDate ?? '—') },
+          { label: '状态', value: <StatusBadge status={String(row.status)} label={ORDER_STATUS_LABELS[String(row.status)] ?? String(row.status)} /> },
+          { label: '来源', value: String(row.source ?? '—') },
+          { label: '关联采购', value: row.hasPurchase ? '是' : '否' },
+          { label: '跟进人', value: String(row.owner ?? '—') },
+          { label: '备注', value: String(row.remark ?? '—') },
+        ];
+    }
   };
 
   const handleSave = () => {
@@ -156,12 +312,13 @@ export default function SalesPage() {
     exportTableCsv(`销售管理-${config.label}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
   };
 
-  const actionCol: TableProps<AnyRow>['columns'][number] = {
+  const actionCol: NonNullable<TableProps<AnyRow>['columns']>[number] = {
     title: '操作',
     key: '__actions',
-    width: 110,
+    width: 160,
     render: (_, row) => (
       <Space size={0}>
+        <Button type="link" size="small" style={{ padding: '0 4px', fontSize: 12 }} onClick={() => openDetail(row)}>详情</Button>
         <Button type="link" size="small" style={{ padding: '0 4px', fontSize: 12 }} onClick={() => openEdit(row)}>编辑</Button>
         <Popconfirm title="确认删除该记录？" onConfirm={() => handleDelete(row)} okText="删除" cancelText="取消">
           <Button type="link" size="small" danger style={{ padding: '0 4px', fontSize: 12 }}>删除</Button>
@@ -243,15 +400,48 @@ export default function SalesPage() {
           items={tabLabels.map((label, i) => ({ key: String(i), label }))}
           style={{ minHeight: 36 }}
         />
-        <Input
-          prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />}
-          placeholder="搜索..."
-          value={kw}
-          onChange={(e) => setKw(e.target.value)}
-          style={{ width: 200, marginBottom: 12 }}
-          variant="borderless"
-        />
-        <DataTable columns={colsMap[tab]} rows={rowsMap[tab]} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <Input
+            prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />}
+            placeholder="搜索..."
+            value={kw}
+            onChange={(e) => setKw(e.target.value)}
+            style={{ width: 200 }}
+            variant="borderless"
+          />
+          {tab === 0 && (
+            <Segmented
+              size="small"
+              value={inquiryView}
+              onChange={(v) => setInquiryView(v as 'table' | 'kanban')}
+              options={[{ label: '表格', value: 'table' }, { label: '看板', value: 'kanban' }]}
+            />
+          )}
+        </div>
+        {tab === 0 && inquiryView === 'kanban' ? (
+          <KanbanBoard
+            columns={Object.entries(INQUIRY_STATUS_LABELS).map(([key, title]) => ({ key, title, color: INQUIRY_STATUS_COLORS[key] }))}
+            items={inquiries.map((i) => ({
+              id: String(i.id),
+              column: String(i.status),
+              title: String(i.code ?? i.id),
+              subtitle: `${lookups.customerName(i.customerId)} · ${lookups.productName(i.productId)}`,
+              extra: (
+                <span style={{ color: token.colorTextSecondary }}>
+                  ×{Number(i.quantity ?? 0).toLocaleString()}
+                  {i.targetPrice != null && <span style={{ float: 'right' }}>{Number(i.targetPrice).toLocaleString()} {String(i.currency ?? '')}</span>}
+                </span>
+              ),
+            }))}
+            onMove={(id, _from, to) => updateInquiry.mutate({ id, data: { status: to } as never })}
+            onCardClick={(id) => {
+              const row = inquiries.find((x) => String(x.id) === id);
+              if (row) openDetail(row);
+            }}
+          />
+        ) : (
+          <DataTable columns={colsMap[tab]} rows={rowsMap[tab]} />
+        )}
       </Card>
       <FormDialog open={dialogOpen} title={editing ? `编辑${config.label}` : `新增${config.label}`} onClose={() => setDialogOpen(false)} onSave={handleSave} width={640}>
         <Form form={form} layout="horizontal" labelCol={{ span: 6 }} wrapperCol={{ span: 16 }} style={{ marginBottom: 0 }}>
@@ -271,6 +461,61 @@ export default function SalesPage() {
           </Row>
         </Form>
       </FormDialog>
+      {detail && (
+        <DocumentDetailDrawer
+          open
+          title={`${TAB_CONFIGS[detail.tab].label}详情`}
+          fields={buildDetailFields(detail.tab, detail.row)}
+          items={detail.tab === 0 ? null : draftItems}
+          onItemsChange={detail.tab === 0 ? undefined : setDraftItems}
+          products={lookups.productsRaw}
+          showCost={detail.tab === 1}
+          currency={String(detail.row.currency ?? '')}
+          onClose={closeDetail}
+          footer={
+            <Space>
+              {detail.tab === 1 && (
+                <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint('quotation')}>打印报价单</Button>
+              )}
+              {detail.tab === 3 && (
+                <>
+                  <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint('pi')}>打印 PI</Button>
+                  <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint('packingList')}>打印装箱单</Button>
+                </>
+              )}
+              {detail.tab === 4 && (
+                <Button size="small" icon={<PrinterOutlined />} onClick={() => handlePrint('packingList')}>打印装箱单</Button>
+              )}
+              <Button size="small" onClick={closeDetail}>关闭</Button>
+              {detail.tab !== 0 && (
+                <Button type="primary" size="small" onClick={handleSaveItems}>保存明细</Button>
+              )}
+            </Space>
+          }
+          extra={
+            detail.tab === 0 ? (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, margin: '16px 0 8px' }}>询盘邮件原文</div>
+                <pre
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 1.7,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    background: token.colorFillQuaternary,
+                    padding: 12,
+                    borderRadius: 4,
+                    margin: 0,
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {String((detail.row.emailRaw as string) ?? '—')}
+                </pre>
+              </div>
+            ) : undefined
+          }
+        />
+      )}
     </div>
   );
 }

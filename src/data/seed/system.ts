@@ -34,11 +34,11 @@ export const seedInventories: Inventory[] = [
 ];
 
 export const seedInboundOrders: InboundOrder[] = [
-  { ...base('ib1'), code: 'IB20261101', poId: 'po_1', warehouseId: 'wh_finished', status: 'completed', inboundDate: '2026-11-01', operator: '王仓管', remark: 'PO-2026-001 到货入库' },
+  { ...base('ib1'), code: 'IB20261101', poId: 'po_1', warehouseId: 'wh_finished', items: [{ productId: 'p_led_panel', productName: 'LED 面板灯 36W', quantity: 3000, unitCost: 28.5, batchNo: 'B20261101', unit: 'pcs' }, { productId: 'p_led_bulb', productName: 'LED 球泡灯 9W', quantity: 2000, unitCost: 4.5, batchNo: 'B20261101', unit: 'pcs' }], status: 'completed', inboundDate: '2026-11-01', operator: '王仓管', remark: 'PO-2026-001 到货入库' },
 ];
 
 export const seedOutboundOrders: OutboundOrder[] = [
-  { ...base('ob1'), code: 'OB20261102', soId: 'so_1', warehouseId: 'wh_finished', status: 'confirmed', outboundDate: '2026-11-02', operator: '王仓管', bookingId: 'bk_1', remark: 'SO-2026-001 出库待运' },
+  { ...base('ob1'), code: 'OB20261102', soId: 'so_1', warehouseId: 'wh_finished', items: [{ productId: 'p_led_panel', productName: 'LED 面板灯 36W', quantity: 5000, unit: 'pcs' }], status: 'confirmed', outboundDate: '2026-11-02', operator: '王仓管', bookingId: 'bk_1', remark: 'SO-2026-001 出库待运' },
 ];
 
 export const seedTransferOrders: TransferOrder[] = [
