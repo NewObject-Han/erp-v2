@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Card, Tabs, Input, Button, Form, Row, Col, Select, InputNumber, Space, theme as antdTheme } from 'antd';
-import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import { useCustomers, useSuppliers, useCustomerCredits, useCreateCustomer, useCreateSupplier, useLookups } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
+import ImportWizard, { type TargetField } from '../../components/common/ImportWizard';
 import { exportTableCsv } from '../../utils/exportCsv';
 import { translateEnum } from '../../utils/labels';
 import PageHeader from '../../components/common/PageHeader';
@@ -12,11 +13,33 @@ import type { TableProps } from 'antd';
 
 type AnyRow = Record<string, unknown>;
 
+/** 客户导入目标字段 */
+const CUSTOMER_FIELDS: TargetField[] = [
+  { name: 'code', label: '编码' },
+  { name: 'name', label: '名称', required: true },
+  { name: 'country', label: '国别' },
+  { name: 'contactPerson', label: '联系人' },
+  { name: 'paymentTerms', label: '付款方式' },
+  { name: 'creditLimit', label: '信用额度', validate: (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 ? null : '必须是非负数字') },
+  { name: 'level', label: '等级' },
+];
+
+/** 供应商导入目标字段 */
+const SUPPLIER_FIELDS: TargetField[] = [
+  { name: 'code', label: '编码' },
+  { name: 'name', label: '名称', required: true },
+  { name: 'country', label: '国别' },
+  { name: 'mainCategory', label: '主营品类' },
+  { name: 'level', label: '等级' },
+  { name: 'onTimeRate', label: '准交率', validate: (v) => (Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 100 ? null : '需为 0-100 的数字') },
+];
+
 export default function CrmPage() {
   const { token } = antdTheme.useToken();
   const [tab, setTab] = useState(0);
   const [kw, setKw] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [form] = Form.useForm();
 
   const { data: cusData } = useCustomers({ keyword: kw });
@@ -26,9 +49,9 @@ export default function CrmPage() {
   const createSupplier = useCreateSupplier();
   const lookups = useLookups();
 
-  const customers = (cusData as { list: AnyRow[] })?.list ?? [];
-  const suppliers = (supData as { list: AnyRow[] })?.list ?? [];
-  const credits = (creditData as unknown[]) ?? [];
+  const customers = (cusData as unknown as { list: AnyRow[] })?.list ?? [];
+  const suppliers = (supData as unknown as { list: AnyRow[] })?.list ?? [];
+  const credits = (creditData as unknown as AnyRow[]) ?? [];
 
   const handleSave = () => {
     const values = form.getFieldsValue();
@@ -36,6 +59,21 @@ export default function CrmPage() {
     else createSupplier.mutate({ ...values, id: `sup_${Date.now()}`, createdAt: new Date().toISOString() } as never);
     setDialogOpen(false);
     form.resetFields();
+  };
+
+  /** Excel 导入：逐行写入当前 tab 对应的资源 */
+  const handleImportRows = async (rows: Record<string, unknown>[]) => {
+    for (let i = 0; i < rows.length; i++) {
+      const data = {
+        ...rows[i],
+        id: `${tab === 0 ? 'cus' : 'sup'}_${Date.now()}_${i}`,
+        createdAt: new Date().toISOString(),
+        status: rows[i].status ?? 'active',
+      };
+      if (tab === 0) await createCustomer.mutateAsync(data as never);
+      else await createSupplier.mutateAsync(data as never);
+    }
+    return rows.length;
   };
 
   const cusCols: TableProps<AnyRow>['columns'] = [
@@ -76,7 +114,11 @@ export default function CrmPage() {
 
   return (
     <div>
-      <PageHeader title="客户与供应商" subtitle="客户档案 / 供应商档案 / 客户信用管理" actions={<Space><Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button><Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); form.setFieldsValue({ status: 'active', paymentTerms: 'T/T', creditLimit: 50000, creditDays: 30 }); setDialogOpen(true); }}>新增</Button></Space>} />
+      <PageHeader title="客户与供应商" subtitle="客户档案 / 供应商档案 / 客户信用管理" actions={<Space>
+        {tab < 2 && <Button icon={<UploadOutlined />} size="small" onClick={() => setImportOpen(true)}>导入</Button>}
+        <Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button>
+        <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); form.setFieldsValue({ status: 'active', paymentTerms: 'T/T', creditLimit: 50000, creditDays: 30 }); setDialogOpen(true); }}>新增</Button>
+      </Space>} />
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />
@@ -94,6 +136,13 @@ export default function CrmPage() {
           </Row>
         </Form>
       </FormDialog>
+      <ImportWizard
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        targetLabel={tabLabels[tab]}
+        fields={tab === 0 ? CUSTOMER_FIELDS : SUPPLIER_FIELDS}
+        onImport={handleImportRows}
+      />
     </div>
   );
 }
