@@ -1,7 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { Layout, Menu, Avatar, Dropdown, Badge, Input, Space, Typography, Button, Result, theme as antdTheme, AutoComplete, Popover, List, Empty } from 'antd';
-import { useQuery } from '@tanstack/react-query';
 import {
   DashboardOutlined,
   ShopOutlined,
@@ -29,8 +28,9 @@ import {
   ExceptionOutlined,
   AlertOutlined,
 } from '@ant-design/icons';
-import { customers, products, suppliers, salesOrders, purchaseOrders } from '../../api/repository';
-import { useStockAlerts, useTrackingExceptions, useReceivables } from '../../api/hooks';
+import { useStockAlerts, useTrackingExceptions, useReceivables, useSearchItems } from '../../api/hooks';
+import type { SearchItem } from '../../api/hooks';
+import CommandPalette, { type Command } from '../common/CommandPalette';
 import useAuthStore from '../../stores/useAuthStore';
 import useUiStore from '../../stores/useUiStore';
 import { useT } from '../../i18n';
@@ -121,60 +121,17 @@ function buildMenuItems(allowed?: Set<string>, t: (s: string) => string = (s) =>
 
 // ===== 全局搜索 =====
 
-interface SearchItem {
-  value: string;
-  label: React.ReactNode;
-  path: string;
-}
-
-async function fetchAll<T extends { id: string }>(repo: { all: () => Promise<T[]> }): Promise<T[]> {
-  try {
-    return await repo.all();
-  } catch {
-    return [];
-  }
-}
-
 function GlobalSearch() {
   const navigate = useNavigate();
   const [keyword, setKeyword] = useState('');
   const t = useT();
-
-  const { data: cusList } = useQuery({ queryKey: ['gsearch', 'customers'], queryFn: () => fetchAll(customers), staleTime: 60_000 });
-  const { data: prodList } = useQuery({ queryKey: ['gsearch', 'products'], queryFn: () => fetchAll(products), staleTime: 60_000 });
-  const { data: supList } = useQuery({ queryKey: ['gsearch', 'suppliers'], queryFn: () => fetchAll(suppliers), staleTime: 60_000 });
-  const { data: soList } = useQuery({ queryKey: ['gsearch', 'salesOrders'], queryFn: () => fetchAll(salesOrders), staleTime: 60_000 });
-  const { data: poList } = useQuery({ queryKey: ['gsearch', 'purchaseOrders'], queryFn: () => fetchAll(purchaseOrders), staleTime: 60_000 });
-
-  const options = useMemo(() => {
-    const kw = keyword.trim().toLowerCase();
-    if (!kw) return [];
-    const match = (s: unknown) => String(s ?? '').toLowerCase().includes(kw);
-
-    const items: SearchItem[] = [];
-    (cusList ?? []).forEach((c: { id: string; name?: string }) => {
-      if (match(c.name)) items.push({ value: c.id, label: `客户 · ${c.name}`, path: '/crm' });
-    });
-    (prodList ?? []).forEach((p: { id: string; name?: string; sku?: string }) => {
-      if (match(p.name) || match(p.sku)) items.push({ value: p.id, label: `商品 · ${p.name}${p.sku ? ` (${p.sku})` : ''}`, path: '/master' });
-    });
-    (supList ?? []).forEach((s: { id: string; name?: string }) => {
-      if (match(s.name)) items.push({ value: s.id, label: `供应商 · ${s.name}`, path: '/crm' });
-    });
-    (soList ?? []).forEach((o: { id: string; code?: string }) => {
-      if (match(o.code)) items.push({ value: o.id, label: `销售订单 · ${o.code}`, path: '/sales' });
-    });
-    (poList ?? []).forEach((o: { id: string; code?: string }) => {
-      if (match(o.code)) items.push({ value: o.id, label: `采购订单 · ${o.code}`, path: '/purchase' });
-    });
-    return items.slice(0, 12);
-  }, [keyword, cusList, prodList, supList, soList, poList]);
+  const items = useSearchItems(keyword);
 
   return (
     <AutoComplete
       value={keyword}
       onChange={setKeyword}
-      options={options}
+      options={items}
       onSelect={(_value, option) => {
         const item = option as unknown as SearchItem;
         if (item.path) navigate(item.path);
@@ -265,6 +222,7 @@ function NotificationBell() {
 
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = antdTheme.useToken();
@@ -297,6 +255,31 @@ export default function MainLayout() {
         : NAV_GROUPS),
     [allowedKeys],
   );
+
+  // Ctrl+K / Cmd+K 唤起命令面板
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCmdOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // 命令面板：页面导航 + 界面动作
+  const commands = useMemo<Command[]>(() => {
+    const nav: Command[] = visibleGroups.flatMap((g) =>
+      g.items.map((it) => ({ id: `nav-${it.key}`, label: it.label, group: '页面', run: () => navigate(it.key) })),
+    );
+    const actions: Command[] = [
+      { id: 'theme', label: themeMode === 'dark' ? '切换浅色模式' : '切换深色模式', group: '操作', run: toggleTheme },
+      { id: 'lang', label: lang === 'zh' ? '切换英文界面' : '切换中文界面', group: '操作', run: () => setLang(lang === 'zh' ? 'en' : 'zh') },
+      { id: 'collapse', label: collapsed ? '展开侧边栏' : '收起侧边栏', group: '操作', run: () => setCollapsed((c) => !c) },
+    ];
+    return [...nav, ...actions];
+  }, [visibleGroups, themeMode, lang, collapsed, navigate, toggleTheme, setLang]);
 
   /** 直接输入 URL 访问无权页面时拦截展示 403 */
   const forbidden =
@@ -396,6 +379,14 @@ export default function MainLayout() {
               {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </span>
             <GlobalSearch />
+            <Button
+              size="small"
+              style={{ fontSize: 11, padding: '0 8px', height: 24, color: 'inherit', opacity: 0.55 }}
+              onClick={() => setCmdOpen(true)}
+              title="打开命令面板 (Ctrl+K)"
+            >
+              Ctrl K
+            </Button>
           </Space>
           <Space size={12} align="center">
             <NotificationBell />
@@ -442,6 +433,7 @@ export default function MainLayout() {
           )}
         </Content>
       </Layout>
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} commands={commands} />
     </Layout>
   );
 }

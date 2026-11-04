@@ -13,3 +13,4 @@ export * from './useFinance';
 export * from './useTax';
 export * from './useSystem';
 export * from './useLookups';
+export * from './useSearch';

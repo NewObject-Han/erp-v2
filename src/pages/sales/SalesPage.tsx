@@ -8,9 +8,11 @@ import {
   useCreateSample, useUpdateSample, useDeleteSample,
   useCreatePi, useUpdatePi, useDeletePi,
   useCreateSalesOrder, useUpdateSalesOrder, useDeleteSalesOrder,
+  useBatchDelete,
   useLookups,
 } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
+import AdvancedFilter, { type FilterField, type FilterValue } from '../../components/common/AdvancedFilter';
 import PageHeader from '../../components/common/PageHeader';
 import KanbanBoard from '../../components/common/KanbanBoard';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -23,6 +25,7 @@ import WorkflowGuide from '../../components/common/WorkflowGuide';
 import { INQUIRY_STATUS_LABELS, QUOTATION_STATUS_LABELS, ORDER_STATUS_LABELS } from '../../data/constants/labels';
 import { exportTableCsv } from '../../utils/exportCsv';
 import type { TableProps } from 'antd';
+import type { Key } from 'react';
 
 const workflowSteps = [
   { label: '询盘', to: '/sales' },
@@ -83,6 +86,9 @@ const INQUIRY_STATUS_COLORS: Record<string, string> = {
   closed: 'default',
 };
 
+/** 批量删除对应的资源名（与 TAB_CONFIGS 对齐） */
+const BATCH_RESOURCES = ['inquiries', 'quotations', 'sampleOrders', 'piDocs', 'salesOrders'];
+
 export default function SalesPage() {
   const { token } = antdTheme.useToken();
   const [tab, setTab] = useState(0);
@@ -92,6 +98,8 @@ export default function SalesPage() {
   const [form] = Form.useForm();
   const [detail, setDetail] = useState<{ tab: number; row: AnyRow } | null>(null);
   const [approvalRow, setApprovalRow] = useState<AnyRow | null>(null);
+  const [selKeys, setSelKeys] = useState<Key[]>([]);
+  const [adv, setAdv] = useState<FilterValue>({});
   const [draftItems, setDraftItems] = useState<LineItemRow[] | null>(null);
   const [inquiryView, setInquiryView] = useState<'table' | 'kanban'>('table');
 
@@ -117,6 +125,7 @@ export default function SalesPage() {
   const updateOrder = useUpdateSalesOrder();
   const deleteOrder = useDeleteSalesOrder();
   const lookups = useLookups();
+  const batchDelete = useBatchDelete<{ id: string }>(BATCH_RESOURCES[tab]);
 
   const inquiries = (inquiriesData as unknown as { list: AnyRow[] })?.list ?? [];
   const quotations = (quotationsData as unknown as { list: AnyRow[] })?.list ?? [];
@@ -401,7 +410,33 @@ export default function SalesPage() {
   ];
 
   const colsMap = [inquiryCols, quotationCols, sampleCols, piCols, orderCols];
-  const rowsMap = [inquiries, quotations, samples, piDocs, orders];
+
+  /** 高级筛选：状态等值 / 跟进人等值 / 金额区间（总价或目标价） */
+  const applyAdv = (rows: AnyRow[]) =>
+    rows.filter((r) => {
+      if (adv.status && String(r.status) !== adv.status) return false;
+      if (adv.owner && String(r.owner) !== adv.owner) return false;
+      const range = adv.amount as [number | undefined, number | undefined] | undefined;
+      if (range && (range[0] != null || range[1] != null)) {
+        const amt = Number(r.totalAmount ?? r.targetPrice ?? 0);
+        if (range[0] != null && amt < range[0]) return false;
+        if (range[1] != null && amt > range[1]) return false;
+      }
+      return true;
+    });
+
+  const rowsMap = [inquiries, quotations, samples, piDocs, orders].map(applyAdv);
+
+  const ownerOptions = [...new Set(([inquiries, quotations, samples, piDocs, orders][tab] ?? [])
+    .map((r) => String(r.owner ?? ''))
+    .filter((o) => o && o !== '—'))]
+    .map((v) => ({ label: v, value: v }));
+
+  const filterFields: FilterField[] = [
+    { name: 'status', label: '状态', type: 'select', options: config.statusOptions },
+    { name: 'owner', label: '跟进人', type: 'select', options: ownerOptions },
+    { name: 'amount', label: '金额区间', type: 'numberRange' },
+  ];
   const tabLabels = TAB_CONFIGS.map((c) => c.label);
 
   return (
@@ -420,7 +455,7 @@ export default function SalesPage() {
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs
           activeKey={String(tab)}
-          onChange={(k) => setTab(Number(k))}
+          onChange={(k) => { setTab(Number(k)); setSelKeys([]); setAdv({}); }}
           items={tabLabels.map((label, i) => ({ key: String(i), label }))}
           style={{ minHeight: 36 }}
         />
@@ -433,14 +468,27 @@ export default function SalesPage() {
             style={{ width: 200 }}
             variant="borderless"
           />
-          {tab === 0 && (
-            <Segmented
-              size="small"
-              value={inquiryView}
-              onChange={(v) => setInquiryView(v as 'table' | 'kanban')}
-              options={[{ label: '表格', value: 'table' }, { label: '看板', value: 'kanban' }]}
-            />
-          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {selKeys.length > 0 && (
+              <Popconfirm
+                title={`确认删除选中的 ${selKeys.length} 条记录？`}
+                onConfirm={() => { batchDelete.mutate(selKeys.map(String)); setSelKeys([]); }}
+              >
+                <Button size="small" danger loading={batchDelete.isPending} style={{ fontSize: 12 }}>
+                  批量删除 ({selKeys.length})
+                </Button>
+              </Popconfirm>
+            )}
+            <AdvancedFilter fields={filterFields} value={adv} onChange={setAdv} />
+            {tab === 0 && (
+              <Segmented
+                size="small"
+                value={inquiryView}
+                onChange={(v) => setInquiryView(v as 'table' | 'kanban')}
+                options={[{ label: '表格', value: 'table' }, { label: '看板', value: 'kanban' }]}
+              />
+            )}
+          </div>
         </div>
         {tab === 0 && inquiryView === 'kanban' ? (
           <KanbanBoard
@@ -464,7 +512,12 @@ export default function SalesPage() {
             }}
           />
         ) : (
-          <DataTable columns={colsMap[tab]} rows={rowsMap[tab]} />
+          <DataTable
+            columns={colsMap[tab]}
+            rows={rowsMap[tab]}
+            settingKey={`sales-${tab}`}
+            rowSelection={{ selectedRowKeys: selKeys, onChange: (keys) => setSelKeys(keys) }}
+          />
         )}
       </Card>
       <FormDialog open={dialogOpen} title={editing ? `编辑${config.label}` : `新增${config.label}`} onClose={() => setDialogOpen(false)} onSave={handleSave} width={640}>

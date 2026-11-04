@@ -89,7 +89,7 @@ export default function FinancePage() {
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />
-        <DataTable columns={colsMap[tab]} rows={rowsMap[tab]} />
+        <DataTable columns={colsMap[tab]} rows={rowsMap[tab]} settingKey={`finance-${tab}`} />
       </Card>
       {approvalRow && (
         <ApprovalDrawer
