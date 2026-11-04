@@ -429,7 +429,9 @@ export default function MainLayout() {
               extra={<Button type="primary" onClick={() => navigate('/')}>{t('返回工作台')}</Button>}
             />
           ) : (
-            <Outlet />
+            <div key={location.pathname} className="page-transition">
+              <Outlet />
+            </div>
           )}
         </Content>
       </Layout>
