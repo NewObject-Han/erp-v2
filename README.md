@@ -31,9 +31,7 @@
 - **开放平台**（OpenPlatform）：API 集成配置
 - **系统**（System）：用户、角色、权限、操作日志
 
-### AI 模拟中心
-
-纯前端模拟实现的 AI 能力：
+### AI 中心
 
 - HS 编码智能归类
 - 利润模拟器
@@ -88,9 +86,3 @@ src/
 ├── types/          # 各模块 TypeScript 类型定义
 └── utils/          # CSV 导出、格式化、ID 生成等工具
 ```
-
-## 数据层说明
-
-当前使用 Mock Repository（`src/api/repository.ts`）+ 种子数据，数据持久化在浏览器 localStorage（key 前缀 `erp-v2:data:*`）。所有读写通过 React Query hooks 进行，切换真实后端时只需将 repository 实现替换为 HTTP 调用，页面层代码无需改动。
-
-清除浏览器 localStorage 即可恢复种子数据。
