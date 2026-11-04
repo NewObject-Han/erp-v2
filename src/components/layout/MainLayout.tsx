@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
-import { Layout, Menu, Avatar, Dropdown, Badge, Input, Space, Typography, theme as antdTheme } from 'antd';
+import { Layout, Menu, Avatar, Dropdown, Badge, Input, Space, Typography, theme as antdTheme, AutoComplete, Popover, List, Empty } from 'antd';
+import { useQuery } from '@tanstack/react-query';
 import {
   DashboardOutlined,
   ShopOutlined,
@@ -22,7 +23,12 @@ import {
   UserOutlined,
   LogoutOutlined,
   GlobalOutlined,
+  WarningOutlined,
+  ExceptionOutlined,
+  AlertOutlined,
 } from '@ant-design/icons';
+import { customers, products, suppliers, salesOrders, purchaseOrders } from '../../api/repository';
+import { useStockAlerts, useTrackingExceptions, useReceivables } from '../../api/hooks';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -96,6 +102,148 @@ function buildMenuItems() {
   }));
 }
 
+// ===== 全局搜索 =====
+
+interface SearchItem {
+  value: string;
+  label: React.ReactNode;
+  path: string;
+}
+
+async function fetchAll<T extends { id: string }>(repo: { all: () => Promise<T[]> }): Promise<T[]> {
+  try {
+    return await repo.all();
+  } catch {
+    return [];
+  }
+}
+
+function GlobalSearch() {
+  const navigate = useNavigate();
+  const [keyword, setKeyword] = useState('');
+
+  const { data: cusList } = useQuery({ queryKey: ['gsearch', 'customers'], queryFn: () => fetchAll(customers), staleTime: 60_000 });
+  const { data: prodList } = useQuery({ queryKey: ['gsearch', 'products'], queryFn: () => fetchAll(products), staleTime: 60_000 });
+  const { data: supList } = useQuery({ queryKey: ['gsearch', 'suppliers'], queryFn: () => fetchAll(suppliers), staleTime: 60_000 });
+  const { data: soList } = useQuery({ queryKey: ['gsearch', 'salesOrders'], queryFn: () => fetchAll(salesOrders), staleTime: 60_000 });
+  const { data: poList } = useQuery({ queryKey: ['gsearch', 'purchaseOrders'], queryFn: () => fetchAll(purchaseOrders), staleTime: 60_000 });
+
+  const options = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return [];
+    const match = (s: unknown) => String(s ?? '').toLowerCase().includes(kw);
+
+    const items: SearchItem[] = [];
+    (cusList ?? []).forEach((c: { id: string; name?: string }) => {
+      if (match(c.name)) items.push({ value: c.id, label: `客户 · ${c.name}`, path: '/crm' });
+    });
+    (prodList ?? []).forEach((p: { id: string; name?: string; sku?: string }) => {
+      if (match(p.name) || match(p.sku)) items.push({ value: p.id, label: `商品 · ${p.name}${p.sku ? ` (${p.sku})` : ''}`, path: '/master' });
+    });
+    (supList ?? []).forEach((s: { id: string; name?: string }) => {
+      if (match(s.name)) items.push({ value: s.id, label: `供应商 · ${s.name}`, path: '/crm' });
+    });
+    (soList ?? []).forEach((o: { id: string; code?: string }) => {
+      if (match(o.code)) items.push({ value: o.id, label: `销售订单 · ${o.code}`, path: '/sales' });
+    });
+    (poList ?? []).forEach((o: { id: string; code?: string }) => {
+      if (match(o.code)) items.push({ value: o.id, label: `采购订单 · ${o.code}`, path: '/purchase' });
+    });
+    return items.slice(0, 12);
+  }, [keyword, cusList, prodList, supList, soList, poList]);
+
+  return (
+    <AutoComplete
+      value={keyword}
+      onChange={setKeyword}
+      options={options}
+      onSelect={(_value, option) => {
+        const item = option as unknown as SearchItem;
+        if (item.path) navigate(item.path);
+        setKeyword('');
+      }}
+      style={{ width: 260 }}
+      popupMatchSelectWidth={320}
+    >
+      <Input
+        prefix={<SearchOutlined style={{ color: 'inherit', opacity: 0.45 }} />}
+        placeholder="全局搜索：客户/商品/单号..."
+        style={{ height: 30, fontSize: 12.5 }}
+        allowClear
+      />
+    </AutoComplete>
+  );
+}
+
+// ===== 通知中心 =====
+
+interface NoticeItem {
+  key: string;
+  icon: React.ReactNode;
+  text: string;
+  sub: string;
+  path: string;
+}
+
+function NotificationBell() {
+  const navigate = useNavigate();
+  const { token } = antdTheme.useToken();
+  const { data: alertData } = useStockAlerts();
+  const { data: exceptionData } = useTrackingExceptions();
+  const { data: arData } = useReceivables();
+
+  const notices = useMemo(() => {
+    const items: NoticeItem[] = [];
+    ((alertData as { status?: string; message?: string }[] | undefined) ?? [])
+      .filter((a) => a.status === 'open')
+      .forEach((a, i) => {
+        items.push({ key: `alert-${i}`, icon: <AlertOutlined style={{ color: token.colorWarning }} />, text: String(a.message ?? '库存预警'), sub: '仓储管理', path: '/warehouse' });
+      });
+    (((exceptionData as { list?: Record<string, unknown>[] })?.list) ?? [])
+      .filter((e) => e.status === 'open' || e.status === 'processing')
+      .forEach((e, i) => {
+        items.push({ key: `exc-${i}`, icon: <ExceptionOutlined style={{ color: token.colorError }} />, text: `跟单异常：${String(e.description ?? '')}`, sub: '订单跟单', path: '/tracking' });
+      });
+    (((arData as { list?: Record<string, unknown>[] })?.list) ?? [])
+      .filter((a) => a.status === 'overdue')
+      .forEach((a, i) => {
+        items.push({ key: `ar-${i}`, icon: <WarningOutlined style={{ color: token.colorError }} />, text: `应收逾期：${String(a.code ?? '')}`, sub: '财务管理', path: '/finance' });
+      });
+    return items;
+  }, [alertData, exceptionData, arData, token]);
+
+  const content = notices.length === 0
+    ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待处理提醒" style={{ margin: '12px 0' }} />
+    : (
+      <div style={{ width: 320, maxHeight: 360, overflow: 'auto' }}>
+        <List
+          size="small"
+          dataSource={notices}
+          renderItem={(item) => (
+            <List.Item
+              style={{ padding: '8px 4px', cursor: 'pointer' }}
+              onClick={() => navigate(item.path)}
+            >
+              <List.Item.Meta
+                avatar={item.icon}
+                title={<Text style={{ fontSize: 12.5 }}>{item.text}</Text>}
+                description={<Text type="secondary" style={{ fontSize: 11 }}>{item.sub} · 点击前往处理</Text>}
+              />
+            </List.Item>
+          )}
+        />
+      </div>
+    );
+
+  return (
+    <Popover content={content} title={<Text strong style={{ fontSize: 13 }}>通知中心</Text>} trigger="click" placement="bottomRight">
+      <Badge count={notices.length} size="small">
+        <BellOutlined style={{ fontSize: 16, cursor: 'pointer' }} />
+      </Badge>
+    </Popover>
+  );
+}
+
 export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
@@ -113,10 +261,9 @@ export default function MainLayout() {
       { key: 'profile', icon: <UserOutlined />, label: '个人中心' },
       { key: 'logout', icon: <LogoutOutlined />, label: '退出登录' },
     ],
-  };
-
-  const onUserMenuClick = ({ key }: { key: string }) => {
-    if (key === 'logout') navigate('/');
+    onClick: ({ key }: { key: string }) => {
+      if (key === 'logout') navigate('/');
+    },
   };
 
   return (
@@ -173,19 +320,12 @@ export default function MainLayout() {
             <span style={{ cursor: 'pointer', fontSize: 16 }} onClick={() => setCollapsed(!collapsed)}>
               {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </span>
-            <Input
-              prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />}
-              placeholder="全局搜索..."
-              style={{ width: 260, height: 30, fontSize: 12.5 }}
-              variant="borderless"
-            />
+            <GlobalSearch />
           </Space>
           <Space size={12} align="center">
-            <Badge count={3} size="small">
-              <BellOutlined style={{ fontSize: 16, cursor: 'pointer' }} />
-            </Badge>
+            <NotificationBell />
             <GlobalOutlined style={{ fontSize: 15, color: token.colorTextSecondary, cursor: 'pointer' }} />
-            <Dropdown menu={userMenu} onOpenChange={(open) => { if (!open) { /* closed */ } }} onClick={onUserMenuClick} trigger={['click']}>
+            <Dropdown menu={userMenu} trigger={['click']}>
               <Space style={{ cursor: 'pointer' }} size={6}>
                 <Avatar size={26} style={{ background: token.colorPrimary, fontSize: 12 }}>
                   李

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Card, Tabs, Button, Input, Form, InputNumber, Select, theme as antdTheme } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Card, Tabs, Button, Input, Form, InputNumber, Select, Space, theme as antdTheme } from 'antd';
+import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useBookings, useCustoms, useDocuments, useLogisticsTrack, useCreateBooking, useLookups } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
+import { exportTableCsv } from '../../utils/exportCsv';
 import PageHeader from '../../components/common/PageHeader';
 import StatusBadge from '../../components/common/StatusBadge';
 import FormDialog from '../../components/common/FormDialog';
@@ -85,9 +86,13 @@ export default function LogisticsPage() {
   const rowsMap = [bookings, customs, docs, trackings];
   const tabLabels = ['订舱管理', '报关管理', '单证管理', '物流轨迹'];
 
+  const handleExport = () => {
+    exportTableCsv(`物流单证-${tabLabels[tab]}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
+  };
+
   return (
     <div>
-      <PageHeader title="物流单证" subtitle="订舱 · 报关 · 装箱单证 · 物流追踪" actions={tab === 0 ? <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); setDialogOpen(true); }}>新增订舱</Button> : null} />
+      <PageHeader title="物流单证" subtitle="订舱 · 报关 · 装箱单证 · 物流追踪" actions={<Space><Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button>{tab === 0 ? <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); setDialogOpen(true); }}>新增订舱</Button> : null}</Space>} />
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />

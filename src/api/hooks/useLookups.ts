@@ -16,6 +16,11 @@ import {
   warehouses,
 } from '../repository';
 
+export interface LookupOption {
+  value: string;
+  label: string;
+}
+
 export interface EntityLookups {
   customerName: (id: unknown) => string;
   productName: (id: unknown) => string;
@@ -23,6 +28,12 @@ export interface EntityLookups {
   salesOrderCode: (id: unknown) => string;
   purchaseOrderCode: (id: unknown) => string;
   warehouseName: (id: unknown) => string;
+  /** 下拉选项（供表单 Select 使用） */
+  customerOptions: LookupOption[];
+  productOptions: LookupOption[];
+  supplierOptions: LookupOption[];
+  salesOrderOptions: LookupOption[];
+  warehouseOptions: LookupOption[];
 }
 
 async function fetchAll<T extends { id: string }>(
@@ -94,6 +105,22 @@ export function useLookups(): EntityLookups {
       };
     };
 
+    const toOptions = <T extends { id: string; name?: string; code?: string }>(
+      list: T[] | undefined,
+    ): LookupOption[] =>
+      (list ?? []).map((item) => ({
+        value: item.id,
+        label: item.name ?? item.code ?? item.id,
+      }));
+
+    const toCodeOptions = <T extends { id: string; code?: string }>(
+      list: T[] | undefined,
+    ): LookupOption[] =>
+      (list ?? []).filter((item) => item.code).map((item) => ({
+        value: item.id,
+        label: item.code as string,
+      }));
+
     return {
       customerName: nameMap(cusList, ''),
       productName: nameMap(prodList, ''),
@@ -101,6 +128,11 @@ export function useLookups(): EntityLookups {
       salesOrderCode: codeMap(soList),
       purchaseOrderCode: codeMap(poList),
       warehouseName: nameMap(whList, ''),
+      customerOptions: toOptions(cusList),
+      productOptions: toOptions(prodList),
+      supplierOptions: toOptions(supList),
+      salesOrderOptions: toCodeOptions(soList),
+      warehouseOptions: toOptions(whList),
     };
   }, [cusList, prodList, supList, soList, poList, whList]);
 }

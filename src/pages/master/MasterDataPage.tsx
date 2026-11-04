@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Card, Tabs, Input, Button, Form, Row, Col, theme as antdTheme } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Card, Tabs, Input, Button, Form, Row, Col, Space, theme as antdTheme } from 'antd';
+import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useCategories, useProducts, useIncoterms, useCurrencies, useExchangeRates, usePriceList, useLookups } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
+import { exportTableCsv } from '../../utils/exportCsv';
 import PageHeader from '../../components/common/PageHeader';
 import FormDialog from '../../components/common/FormDialog';
 import type { TableProps } from 'antd';
@@ -80,9 +81,13 @@ export default function MasterDataPage() {
   const rowsMap = [products, categories, incoterms, currencies, exchangeRates, priceItems];
   const tabLabels = ['商品', '分类', '贸易术语', '币种', '汇率', '价格矩阵'];
 
+  const handleExport = () => {
+    exportTableCsv(`主数据-${tabLabels[tab]}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
+  };
+
   return (
     <div>
-      <PageHeader title="主数据" subtitle="商品 / 分类 / 贸易术语 / 币种汇率 / 价格矩阵" actions={<Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); setDialogOpen(true); }}>新增</Button>} />
+      <PageHeader title="主数据" subtitle="商品 / 分类 / 贸易术语 / 币种汇率 / 价格矩阵" actions={<Space><Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button><Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); setDialogOpen(true); }}>新增</Button></Space>} />
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Card, Tabs, Input, Button, Form, InputNumber, Select, Row, Col, theme as antdTheme } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Card, Tabs, Input, Button, Form, InputNumber, Select, Row, Col, Space, theme as antdTheme } from 'antd';
+import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useSuppliers, usePurchaseInquiries, usePurchaseOrders, useCreateSupplier, useCreatePurchaseOrder, useLookups } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
 import { translateEnum } from '../../utils/labels';
+import { exportTableCsv } from '../../utils/exportCsv';
 import PageHeader from '../../components/common/PageHeader';
 import StatusBadge from '../../components/common/StatusBadge';
 import FormDialog from '../../components/common/FormDialog';
@@ -68,12 +69,21 @@ export default function PurchasePage() {
   const rowsMap = [suppliers, pInquiries, pOrders];
   const tabLabels = ['供应商', '采购询价', '采购订单'];
 
+  const handleExport = () => {
+    exportTableCsv(`采购管理-${tabLabels[tab]}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
+  };
+
   return (
     <div>
       <PageHeader
         title="采购管理"
         subtitle="供应商管理 · 采购询价 · 采购订单"
-        actions={<Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); setDialogOpen(true); }}>新增</Button>}
+        actions={
+          <Space>
+            <Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button>
+            <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); setDialogOpen(true); }}>新增</Button>
+          </Space>
+        }
       />
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />

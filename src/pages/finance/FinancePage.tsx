@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Card, Tabs, Input, theme as antdTheme } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { Card, Tabs, Input, Button, theme as antdTheme } from 'antd';
+import { SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useReceivables, usePayables, useCostAnalyses, useExpenses, useLookups } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
 import PageHeader from '../../components/common/PageHeader';
 import StatusBadge from '../../components/common/StatusBadge';
+import { exportTableCsv } from '../../utils/exportCsv';
 import type { TableProps } from 'antd';
 
 type AnyRow = Record<string, unknown>;
@@ -64,9 +65,17 @@ export default function FinancePage() {
   const rowsMap = [arList, apList, costs, expenses];
   const tabLabels = ['应收', '应付', '成本', '费用'];
 
+  const handleExport = () => {
+    exportTableCsv(`财务管理-${tabLabels[tab]}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
+  };
+
   return (
     <div>
-      <PageHeader title="财务管理" subtitle="应收 · 应付 · 成本 · 费用" />
+      <PageHeader
+        title="财务管理"
+        subtitle="应收 · 应付 · 成本 · 费用"
+        actions={<Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button>}
+      />
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />

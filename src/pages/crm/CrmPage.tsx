@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Card, Tabs, Input, Button, Form, Row, Col, Select, InputNumber, theme as antdTheme } from 'antd';
-import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { Card, Tabs, Input, Button, Form, Row, Col, Select, InputNumber, Space, theme as antdTheme } from 'antd';
+import { PlusOutlined, SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useCustomers, useSuppliers, useCustomerCredits, useCreateCustomer, useCreateSupplier, useLookups } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
+import { exportTableCsv } from '../../utils/exportCsv';
 import { translateEnum } from '../../utils/labels';
 import PageHeader from '../../components/common/PageHeader';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -69,9 +70,13 @@ export default function CrmPage() {
   const rowsMap = [customers, suppliers, credits];
   const tabLabels = ['客户', '供应商', '客户信用'];
 
+  const handleExport = () => {
+    exportTableCsv(`客户与供应商-${tabLabels[tab]}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
+  };
+
   return (
     <div>
-      <PageHeader title="客户与供应商" subtitle="客户档案 / 供应商档案 / 客户信用管理" actions={<Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); form.setFieldsValue({ status: 'active', paymentTerms: 'T/T', creditLimit: 50000, creditDays: 30 }); setDialogOpen(true); }}>新增</Button>} />
+      <PageHeader title="客户与供应商" subtitle="客户档案 / 供应商档案 / 客户信用管理" actions={<Space><Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button><Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { form.resetFields(); form.setFieldsValue({ status: 'active', paymentTerms: 'T/T', creditLimit: 50000, creditDays: 30 }); setDialogOpen(true); }}>新增</Button></Space>} />
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />

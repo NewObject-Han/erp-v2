@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Card, Tabs, Input, theme as antdTheme } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { Card, Tabs, Input, Button, theme as antdTheme } from 'antd';
+import { SearchOutlined, DownloadOutlined } from '@ant-design/icons';
 import { useInventories, useInboundOrders, useOutboundOrders, useTransferOrders, useStocktakeOrders, useStockAlerts, useLookups } from '../../api/hooks';
 import DataTable from '../../components/common/DataTable';
+import { exportTableCsv } from '../../utils/exportCsv';
 import PageHeader from '../../components/common/PageHeader';
 import StatusBadge from '../../components/common/StatusBadge';
 import type { TableProps } from 'antd';
@@ -84,9 +85,13 @@ export default function WarehousePage() {
   const rowsMap = [inventories, inbounds, outbounds, transfers, stocktakes, alerts];
   const tabLabels = ['库存', '入库', '出库', '调拨', '盘点', '预警'];
 
+  const handleExport = () => {
+    exportTableCsv(`仓储管理-${tabLabels[tab]}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
+  };
+
   return (
     <div>
-      <PageHeader title="仓储管理" subtitle="国内仓：成品仓 / 待运仓 / 物料仓 · 出入库 / 调拨 / 盘点 / 预警" />
+      <PageHeader title="仓储管理" subtitle="国内仓：成品仓 / 待运仓 / 物料仓 · 出入库 / 调拨 / 盘点 / 预警" actions={<Button icon={<DownloadOutlined />} size="small" onClick={handleExport}>导出</Button>} />
       <Card size="small" style={{ borderRadius: 4 }} styles={{ body: { padding: '0 12px 12px' } }}>
         <Tabs activeKey={String(tab)} onChange={(k) => setTab(Number(k))} items={tabLabels.map((label, i) => ({ key: String(i), label }))} style={{ minHeight: 36 }} />
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />
