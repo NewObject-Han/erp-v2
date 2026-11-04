@@ -57,7 +57,8 @@ export type ResourceKey =
   | 'roles'
   | 'permissions'
   | 'operationLogs'
-  | 'aiCallLogs';
+  | 'aiCallLogs'
+  | 'approvals';
 
 const storageKey = (resource: string): string => `${LS_KEY_PREFIX}:data:${resource}`;
 

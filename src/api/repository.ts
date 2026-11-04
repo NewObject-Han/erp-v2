@@ -55,6 +55,7 @@ import type {
   Warehouse,
   AiCallLog,
   OperationLog,
+  ApprovalRecord,
 } from '../types';
 
 /** 通用 CRUD 工厂 */
@@ -130,6 +131,9 @@ export const users = crud<User>('users');
 export const roles = crud<Role>('roles');
 export const permissions = crud<Permission>('permissions');
 export const operationLogs = crud<OperationLog>('operationLogs');
+
+// ===== 审批工作流 =====
+export const approvals = crud<ApprovalRecord>('approvals');
 
 // ===== AI =====
 export const aiCallLogs = crud<AiCallLog>('aiCallLogs');

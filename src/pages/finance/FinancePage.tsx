@@ -5,6 +5,7 @@ import { useReceivables, usePayables, useCostAnalyses, useExpenses, useLookups }
 import DataTable from '../../components/common/DataTable';
 import PageHeader from '../../components/common/PageHeader';
 import StatusBadge from '../../components/common/StatusBadge';
+import ApprovalDrawer from '../../components/common/ApprovalDrawer';
 import { exportTableCsv } from '../../utils/exportCsv';
 import type { TableProps } from 'antd';
 
@@ -14,6 +15,7 @@ export default function FinancePage() {
   const { token } = antdTheme.useToken();
   const [tab, setTab] = useState(0);
   const [kw, setKw] = useState('');
+  const [approvalRow, setApprovalRow] = useState<AnyRow | null>(null);
 
   const { data: arData } = useReceivables({ keyword: kw });
   const { data: apData } = usePayables({ keyword: kw });
@@ -21,10 +23,10 @@ export default function FinancePage() {
   const { data: expData } = useExpenses({ keyword: kw });
   const lookups = useLookups();
 
-  const arList = (arData as { list: AnyRow[] })?.list ?? [];
-  const apList = (apData as { list: AnyRow[] })?.list ?? [];
-  const costs = (costData as unknown[]) ?? [];
-  const expenses = (expData as { list: AnyRow[] })?.list ?? [];
+  const arList = (arData as unknown as { list: AnyRow[] })?.list ?? [];
+  const apList = (apData as unknown as { list: AnyRow[] })?.list ?? [];
+  const costs = (costData as unknown as AnyRow[]) ?? [];
+  const expenses = (expData as unknown as { list: AnyRow[] })?.list ?? [];
 
   const arCols: TableProps<AnyRow>['columns'] = [
     { title: '应收单号', dataIndex: 'code', width: 110 },
@@ -43,6 +45,14 @@ export default function FinancePage() {
     { title: '已付', dataIndex: 'paidAmount', width: 100, render: (v) => `${Number(v).toLocaleString()}` },
     { title: '到期日', dataIndex: 'dueDate', width: 110 },
     { title: '状态', dataIndex: 'status', width: 80, render: (v) => <StatusBadge status={String(v)} label={String(v)} /> },
+    {
+      title: '操作',
+      key: '__actions',
+      width: 70,
+      render: (_, row) => (
+        <Button type="link" size="small" style={{ padding: '0 4px', fontSize: 12 }} onClick={() => setApprovalRow(row)}>审批</Button>
+      ),
+    },
   ];
   const costCols: TableProps<AnyRow>['columns'] = [
     { title: '销售订单', dataIndex: 'salesOrderId', width: 120, render: (v) => lookups.salesOrderCode(v) },
@@ -81,6 +91,19 @@ export default function FinancePage() {
         <Input prefix={<SearchOutlined style={{ color: token.colorTextPlaceholder }} />} placeholder="搜索..." value={kw} onChange={(e) => setKw(e.target.value)} style={{ width: 200, marginBottom: 12 }} variant="borderless" />
         <DataTable columns={colsMap[tab]} rows={rowsMap[tab]} />
       </Card>
+      {approvalRow && (
+        <ApprovalDrawer
+          open
+          bizType="payment"
+          bizId={String(approvalRow.id)}
+          bizCode={String(approvalRow.code ?? approvalRow.id)}
+          docLabel="付款单"
+          amount={Number(approvalRow.amount ?? 0)}
+          currency={String(approvalRow.currency ?? 'CNY')}
+          applicant={String(approvalRow.owner ?? '—')}
+          onClose={() => setApprovalRow(null)}
+        />
+      )}
     </div>
   );
 }

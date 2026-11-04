@@ -16,6 +16,7 @@ import KanbanBoard from '../../components/common/KanbanBoard';
 import StatusBadge from '../../components/common/StatusBadge';
 import FormDialog from '../../components/common/FormDialog';
 import DocumentDetailDrawer, { type DetailField } from '../../components/common/DocumentDetailDrawer';
+import ApprovalDrawer from '../../components/common/ApprovalDrawer';
 import type { LineItemRow } from '../../components/common/LineItemsEditor';
 import { printDocument, type PrintDocType } from '../../utils/printDocument';
 import WorkflowGuide from '../../components/common/WorkflowGuide';
@@ -90,6 +91,7 @@ export default function SalesPage() {
   const [editing, setEditing] = useState<AnyRow | null>(null);
   const [form] = Form.useForm();
   const [detail, setDetail] = useState<{ tab: number; row: AnyRow } | null>(null);
+  const [approvalRow, setApprovalRow] = useState<AnyRow | null>(null);
   const [draftItems, setDraftItems] = useState<LineItemRow[] | null>(null);
   const [inquiryView, setInquiryView] = useState<'table' | 'kanban'>('table');
 
@@ -308,6 +310,25 @@ export default function SalesPage() {
     else deleteOrder.mutate(id);
   };
 
+  /** 审批动作回写报价单状态 */
+  const handleApprovalBiz = (
+    phase: 'apply' | 'approve' | 'reject',
+    comment: string,
+    operator: string,
+  ) => {
+    if (!approvalRow) return;
+    const patch: AnyRow =
+      phase === 'apply'
+        ? { status: 'pending_approval' }
+        : {
+            status: phase === 'approve' ? 'approved' : 'rejected',
+            approver: operator,
+            approvedAt: new Date().toISOString(),
+            approvalRemark: comment,
+          };
+    updateQuotation.mutate({ id: String(approvalRow.id), data: patch as never });
+  };
+
   const handleExport = () => {
     exportTableCsv(`销售管理-${config.label}-${new Date().toISOString().slice(0, 10)}`, colsMap[tab], rowsMap[tab]);
   };
@@ -315,9 +336,12 @@ export default function SalesPage() {
   const actionCol: NonNullable<TableProps<AnyRow>['columns']>[number] = {
     title: '操作',
     key: '__actions',
-    width: 160,
+    width: tab === 1 ? 215 : 160,
     render: (_, row) => (
       <Space size={0}>
+        {tab === 1 && (
+          <Button type="link" size="small" style={{ padding: '0 4px', fontSize: 12 }} onClick={() => setApprovalRow(row)}>审批</Button>
+        )}
         <Button type="link" size="small" style={{ padding: '0 4px', fontSize: 12 }} onClick={() => openDetail(row)}>详情</Button>
         <Button type="link" size="small" style={{ padding: '0 4px', fontSize: 12 }} onClick={() => openEdit(row)}>编辑</Button>
         <Popconfirm title="确认删除该记录？" onConfirm={() => handleDelete(row)} okText="删除" cancelText="取消">
@@ -514,6 +538,20 @@ export default function SalesPage() {
               </div>
             ) : undefined
           }
+        />
+      )}
+      {approvalRow && (
+        <ApprovalDrawer
+          open
+          bizType="quotation"
+          bizId={String(approvalRow.id)}
+          bizCode={String(approvalRow.code ?? approvalRow.id)}
+          docLabel="报价单"
+          amount={Number(approvalRow.totalAmount ?? 0)}
+          currency={String(approvalRow.currency ?? 'USD')}
+          applicant={String(approvalRow.owner ?? '—')}
+          onBizAction={handleApprovalBiz}
+          onClose={() => setApprovalRow(null)}
         />
       )}
     </div>

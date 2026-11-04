@@ -20,6 +20,7 @@ import type {
   User,
   Role,
   Permission,
+  ApprovalRecord,
 } from '../../types';
 
 const NOW = '2026-11-01T08:00:00.000Z';
@@ -128,4 +129,62 @@ export const seedPermissions: Permission[] = [
   { ...base('pm3'), module: 'purchase', action: 'edit', description: '编辑采购单据' },
   { ...base('pm4'), module: 'logistics', action: 'edit', description: '编辑物流单证' },
   { ...base('pm5'), module: 'system', action: 'admin', description: '系统管理' },
+];
+
+// ===== 审批工作流 =====
+export const seedApprovals: ApprovalRecord[] = [
+  {
+    ...base('apv_qt1'),
+    bizType: 'quotation', bizId: 'qt_1', bizCode: 'QT-20261002-001',
+    title: '报价单 QT-20261002-001', amount: 45260, currency: 'USD',
+    applicant: '王芳', approver: '销售总监', status: 'approved',
+    remark: '利润达标，批准',
+    timeline: [
+      { at: '2026-10-02T10:30:00.000Z', action: 'apply', operator: '王芳', comment: '利润率 34.7%，发起报价审批' },
+      { at: '2026-10-02T14:00:00.000Z', action: 'approve', operator: '销售总监', comment: '利润达标，批准' },
+    ],
+  },
+  {
+    ...base('apv_qt2'),
+    bizType: 'quotation', bizId: 'qt_2', bizCode: 'QT-20261010-001',
+    title: '报价单 QT-20261010-001', amount: 20520, currency: 'EUR',
+    applicant: '李明', approver: '销售总监', status: 'approved',
+    remark: '利润良好，批准',
+    timeline: [
+      { at: '2026-10-10T10:30:00.000Z', action: 'apply', operator: '李明', comment: 'CIF 汉堡报价，发起审批' },
+      { at: '2026-10-10T14:00:00.000Z', action: 'approve', operator: '销售总监', comment: '利润良好，批准' },
+    ],
+  },
+  {
+    ...base('apv_qt3'),
+    bizType: 'quotation', bizId: 'qt_3', bizCode: 'QT-20261016-001',
+    title: '报价单 QT-20261016-001', amount: 18175, currency: 'USD',
+    applicant: '王芳', approver: '销售总监', status: 'approved',
+    remark: '利润率高，批准',
+    timeline: [
+      { at: '2026-10-16T10:30:00.000Z', action: 'apply', operator: '王芳', comment: '利润率 55.2%，发起审批' },
+      { at: '2026-10-16T14:00:00.000Z', action: 'approve', operator: '销售总监', comment: '利润率高，批准' },
+    ],
+  },
+  {
+    ...base('apv_ap1'),
+    bizType: 'payment', bizId: 'ap1', bizCode: 'AP20261001',
+    title: '付款审批 AP20261001', amount: 96000, currency: 'CNY',
+    applicant: '赵采购', approver: '财务总监', status: 'approved',
+    remark: '预付款比例合理，同意付款',
+    timeline: [
+      { at: '2026-10-02T09:00:00.000Z', action: 'apply', operator: '赵采购', comment: 'PO-2026-001 预付 30%，发起付款审批' },
+      { at: '2026-10-02T15:00:00.000Z', action: 'approve', operator: '财务总监', comment: '预付款比例合理，同意付款' },
+    ],
+  },
+  {
+    ...base('apv_ap2'),
+    bizType: 'payment', bizId: 'ap2', bizCode: 'AP20260902',
+    title: '付款审批 AP20260902', amount: 54000, currency: 'CNY',
+    applicant: '赵采购', approver: '财务总监', status: 'pending',
+    remark: '逾期应付，加急付款审批',
+    timeline: [
+      { at: '2026-11-03T09:30:00.000Z', action: 'apply', operator: '赵采购', comment: '逾期应付，加急付款审批' },
+    ],
+  },
 ];

@@ -47,3 +47,39 @@ export interface OperationLog extends BaseEntity {
   detail: string;
   at: string;
 }
+
+// ===== 审批工作流 =====
+
+/** 审批业务类型 */
+export type ApprovalBizType = 'quotation' | 'payment';
+
+/** 审批状态 */
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+/** 审批时间线节点 */
+export interface ApprovalNode {
+  at: string;
+  /** 动作：发起 / 通过 / 驳回 */
+  action: 'apply' | 'approve' | 'reject';
+  operator: string;
+  comment: string;
+}
+
+/** 审批记录（独立于业务单据，含完整时间线） */
+export interface ApprovalRecord extends BaseEntity {
+  bizType: ApprovalBizType;
+  bizId: string;
+  bizCode: string;
+  /** 单据标题，如：报价单 QT-20261002-001 */
+  title: string;
+  amount: number;
+  currency: string;
+  /** 发起人 */
+  applicant: string;
+  /** 指定审批人 */
+  approver: string;
+  status: ApprovalStatus;
+  /** 发起说明 / 最近审批意见 */
+  remark: string;
+  timeline: ApprovalNode[];
+}

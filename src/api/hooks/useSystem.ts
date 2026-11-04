@@ -12,6 +12,7 @@ import {
   opportunities,
   customerCredits,
   supplierQualifications,
+  approvals,
 } from '../repository';
 import type {
   User,
@@ -22,6 +23,8 @@ import type {
   Opportunity,
   CustomerCredit,
   SupplierQualification,
+  ApprovalBizType,
+  ApprovalRecord,
 } from '../../types';
 
 // ===== 用户 =====
@@ -233,5 +236,38 @@ export function useUpdateSupplierQualification() {
     mutationFn: ({ id, data }: { id: string; data: Partial<SupplierQualification> }) =>
       supplierQualifications.update(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['supplierQualifications'] }),
+  });
+}
+
+// ===== 审批工作流 =====
+
+/** 按业务单据查询审批记录 */
+export function useApprovals(params?: { bizId?: string; bizType?: ApprovalBizType }) {
+  return useQuery({
+    queryKey: ['approvals', params],
+    queryFn: async () => {
+      const res = await approvals.list();
+      let list = res.list;
+      if (params?.bizId) list = list.filter((a) => a.bizId === params.bizId);
+      if (params?.bizType) list = list.filter((a) => a.bizType === params.bizType);
+      return { ...res, list };
+    },
+  });
+}
+
+export function useCreateApproval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<ApprovalRecord>) => approvals.create(data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['approvals'] }),
+  });
+}
+
+export function useUpdateApproval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<ApprovalRecord> }) =>
+      approvals.update(id, data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['approvals'] }),
   });
 }

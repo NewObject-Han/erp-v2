@@ -103,6 +103,7 @@ export const RESOURCE_PATHS: Record<string, string> = {
   permissions: '/api/v1/permissions',
   operationLogs: '/api/v1/operation-logs',
   aiCallLogs: '/api/v1/ai-call-logs',
+  approvals: '/api/v1/approvals',
 };
 
 export type ResourceName = keyof typeof RESOURCE_PATHS;

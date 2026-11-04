@@ -30,6 +30,7 @@ import {
   seedUsers,
   seedRoles,
   seedPermissions,
+  seedApprovals,
 } from './system';
 
 const SEED_MAP: Record<string, unknown[]> = {
@@ -89,10 +90,12 @@ const SEED_MAP: Record<string, unknown[]> = {
   users: seedUsers,
   roles: seedRoles,
   permissions: seedPermissions,
+  // 审批工作流
+  approvals: seedApprovals,
 };
 
 /** 种子数据版本：种子内容变更时递增，强制重新播种（覆盖旧演示数据） */
-const SEED_VERSION = '3';
+const SEED_VERSION = '4';
 
 const SEED_VERSION_KEY = 'erp_seed_version';
 
